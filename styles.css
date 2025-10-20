@@ -1,0 +1,9 @@
+.text {
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+}
+
+#skibidi {
+    border-radius: 2000px;
+    border-color: black;
+    border-style: solid;
+}
