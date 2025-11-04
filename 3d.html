@@ -22,7 +22,8 @@
             <a href="./index.html" class="navigation"><div class="navdiv"><p class="navtext">Home</p></div></a>
             <a href="./about.html" class="navigation"><div class="navdiv"><p class="navtext">About</p></div></a>
             <a href="./3d.html" class="navigation"><div class="navdiv"><p class="navtext">3D Zone!</p></div></a>
-        </header><script type="x-shader/vs" id="vertex-colorgeo">
+        </header>
+		<script type="x-shader/vs" id="vertex-colorgeo">
             #version 300 es
 
             layout(std140, column_major) uniform;
@@ -47,6 +48,7 @@
             out vec4 vNormal;
             out vec4 vViewPosition;
             out vec4 vViewNormal;
+			flat out int instanceId;
             
             float magicMath(float t) {
                 t = 1.0 / (1.0 + exp(-t));
@@ -54,7 +56,7 @@
             }
 
             float getAngle(float distance, float offset) {
-                float a = magicMath(mod(uTime + offset/32.0*10.0, 10.0) - 5.0);
+                float a = magicMath(mod(uTime + offset/1012.0*316.25, 316.25) - 158.125);
                 float b = smoothstep(0.0, 1.0, a);
                 float t = clamp(distance / 5.0, 0.0, 1.0) * 2.0 - 1.0;
                 return 3.14159*mix(a, b, t);
@@ -64,6 +66,7 @@
                 float distance = position.x * 5.0;
                 float angle = getAngle(distance, float(gl_InstanceID));
                 vec4 newPos = position;
+				instanceId = gl_InstanceID;
                 newPos.x = distance*cos(angle);
                 newPos.y = distance*sin(angle);
                 vPosition = modelMatrix * newPos;
@@ -77,6 +80,7 @@
         <script type="x-shader/fs" id="fragment-colorgeo">
             #version 300 es
             precision highp float;
+			precision highp sampler2DArray;
 
             layout(std140, column_major) uniform;
 
@@ -87,13 +91,14 @@
                 vec4 uLightPosition;
             };
 
-            uniform sampler2D uTexture;
+            uniform sampler2DArray uTexture;
             
             in vec4 vPosition;
             in vec2 vUV;
             in vec4 vNormal;
             in vec4 vViewPosition;
             in vec4 vViewNormal;
+			flat in int instanceId;
 
             layout(location=0) out vec4 color;
             layout(location=1) out vec4 viewPosition;
@@ -108,7 +113,7 @@
                     uv.x = 1.0 - uv.x;
                 }
 
-                vec4 baseColor = texture(uTexture, uv);
+                vec4 baseColor = texture(uTexture, vec3(uv, instanceId));
                 vec3 eyeDirection = normalize(uEyePosition.xyz - position);
                 vec3 lightVec = uLightPosition.xyz - position;
                 vec3 lightDirection = normalize(lightVec);
