@@ -56,7 +56,7 @@
             }
 
             float getAngle(float distance, float offset) {
-                float a = magicMath(mod(uTime + offset/1012.0*316.25, 316.25) - 158.125);
+                float a = magicMath(mod(uTime + offset/166.0*51.875, 51.875) - 25.9375);
                 float b = smoothstep(0.0, 1.0, a);
                 float t = clamp(distance / 5.0, 0.0, 1.0) * 2.0 - 1.0;
                 return 3.14159*mix(a, b, t);
@@ -108,10 +108,6 @@
                 vec3 position = vPosition.xyz;
                 vec3 normal = normalize(vNormal.xyz);
                 vec2 uv = vUV;
-
-                if(gl_FrontFacing) {
-                    uv.x = 1.0 - uv.x;
-                }
 
                 vec4 baseColor = texture(uTexture, vec3(uv, instanceId));
                 vec3 eyeDirection = normalize(uEyePosition.xyz - position);
