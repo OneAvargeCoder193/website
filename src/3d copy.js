@@ -17,7 +17,7 @@ gl.clearColor(0.0, 0.0, 0.0, 1.0)
 gl.enable(gl.DEPTH_TEST);
 
 var NEAR = 0.1;
-var FAR = 100.0;
+var FAR = 10.0;
 
 var NUM_SPHERES = 32;
 var NUM_PER_ROW = 8;
@@ -32,9 +32,9 @@ for (var i = 0; i < NUM_SPHERES; ++i) {
     var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
     var z = Math.cos(angle) * RADIUS;
     spheres[i] = {
-        scale: [1, 1, 1],
+        scale: [0.8, 0.8, 0.8],
         rotate: [0, 0, 0], // Will be used for global rotation
-        translate: [0, 0, 0],
+        translate: [x, y, z],
         modelMatrix: mat4.create()
     };
 }
@@ -162,7 +162,6 @@ gl.uniformBlockBinding(colorGeoProgram, sceneUniformsLocation, 0);
 
 var modelMatrixLocation = gl.getUniformLocation(colorGeoProgram, "uModel");
 var textureLocation = gl.getUniformLocation(colorGeoProgram, "uTexture");
-var timeLocation = gl.getUniformLocation(colorGeoProgram, "uTime");
 
 var ssaoUniformsLocation = gl.getUniformBlockIndex(ssaoProgram, "SSAOUniforms");
 gl.uniformBlockBinding(ssaoProgram, ssaoUniformsLocation, 1);
@@ -249,7 +248,7 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 // SET UP GEOMETRY
 /////////////////////
 
-var sphere = utils.createPlane({size: [1, -5], resolution: [20, 1], position: [0.5, 0, 0]});
+var sphere = utils.createSphere({radius: 0.5});
 var numVertices = sphere.positions.length / 3;
 
 var sphereArray = gl.createVertexArray();
@@ -321,13 +320,13 @@ var projMatrix = mat4.create();
 mat4.perspective(projMatrix, Math.PI / 2, canvas.width / canvas.height, NEAR, FAR);
 
 var viewMatrix = mat4.create();
-var eyePosition = vec3.fromValues(0, 6, 4);
+var eyePosition = vec3.fromValues(0, 0.8, 2);
 mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
 
 var viewProjMatrix = mat4.create();
 mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-var lightPosition = vec3.fromValues(0, 5, 0);
+var lightPosition = vec3.fromValues(1, 1, 2);
 
 var sceneUniformData = new Float32Array(40);
 sceneUniformData.set(viewMatrix);
@@ -349,11 +348,10 @@ var ssaoUniformBuffer = gl.createBuffer();
 gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, ssaoUniformBuffer);
 gl.bufferData(gl.UNIFORM_BUFFER, ssaoUniformData, gl.STATIC_DRAW);
 
-var rotationMatrix = mat4.create();
-
 var image = new Image();
 
 var texture = gl.createTexture();
+var rotationMatrix = mat4.create();
 
 image.onload = function() {
     gl.activeTexture(gl.TEXTURE0);
@@ -425,9 +423,9 @@ function draw(timestamp) {
     gl.useProgram(colorGeoProgram);
     gl.bindVertexArray(sphereArray);
 
-    gl.uniform1f(timeLocation, timestamp / 1000);
-
     for (var i = 0, len = spheres.length; i < len; ++i) {
+        spheres[i].rotate[1] += 0.0075;
+
         utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
         mat4.fromYRotation(rotationMatrix, spheres[i].rotate[1]);
         mat4.multiply(spheres[i].modelMatrix, rotationMatrix, spheres[i].modelMatrix);

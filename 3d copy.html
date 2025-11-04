@@ -38,35 +38,16 @@
                 mat4 uProjection;
                 vec4 uEyePosition;
                 vec4 uLightPosition;
-            };
-
-            uniform float uTime;
+            };       
             
             out vec4 vPosition;
             out vec2 vUV;
             out vec4 vNormal;
             out vec4 vViewPosition;
             out vec4 vViewNormal;
-            
-            float magicMath(float t) {
-                t = 1.0 / (1.0 + exp(-t));
-                return (smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, t)))) + t) / 2.0;
-            }
-
-            float getAngle(float distance, float offset) {
-                float a = magicMath(mod(uTime + offset/32.0*10.0, 10.0) - 5.0);
-                float b = smoothstep(0.0, 1.0, a);
-                float t = clamp(distance / 5.0, 0.0, 1.0) * 2.0 - 1.0;
-                return 3.14159*mix(a, b, t);
-            }
 
             void main() {
-                float distance = position.x * 5.0;
-                float angle = getAngle(distance, float(gl_InstanceID));
-                vec4 newPos = position;
-                newPos.x = distance*cos(angle);
-                newPos.y = distance*sin(angle);
-                vPosition = modelMatrix * newPos;
+                vPosition = modelMatrix * position;
                 vNormal = modelMatrix * vec4(normal, 0.0);
                 vUV = uv;
                 vViewPosition = uViewMatrix * vPosition;
@@ -103,10 +84,6 @@
                 vec3 position = vPosition.xyz;
                 vec3 normal = normalize(vNormal.xyz);
                 vec2 uv = vUV;
-
-                if(gl_FrontFacing) {
-                    uv.x = 1.0 - uv.x;
-                }
 
                 vec4 baseColor = texture(uTexture, uv);
                 vec3 eyeDirection = normalize(uEyePosition.xyz - position);

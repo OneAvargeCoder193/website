@@ -337,6 +337,65 @@
           };
         },
 
+        createPlane: function(options) {
+  options = options || {};
+
+  var size = options.size || [1, 1]; // [width, depth]
+  var resolution = options.resolution || [1, 1]; // [segmentsX, segmentsZ]
+  var position = options.position || [0, 0, 0]; // center position
+
+  var width = size[0];
+  var depth = size[1];
+  var segmentsX = resolution[0];
+  var segmentsZ = resolution[1];
+
+  var halfWidth = width / 2;
+  var halfDepth = depth / 2;
+
+  var positions = [];
+  var uvs = [];
+  var normals = [];
+
+  // Generate vertices
+  for (var z = 0; z <= segmentsZ; z++) {
+    for (var x = 0; x <= segmentsX; x++) {
+      var u = x / segmentsX;
+      var v = z / segmentsZ;
+
+      var posX = -halfWidth + u * width + position[0];
+      var posY = position[1];
+      var posZ = -halfDepth + v * depth + position[2];
+
+      positions.push(posX, posY, posZ);
+      uvs.push(u, v);
+      normals.push(0, 1, 0); // Upward normal
+    }
+  }
+
+  // Generate indices (triangles)
+  var indices = [];
+  for (var z = 0; z < segmentsZ; z++) {
+    for (var x = 0; x < segmentsX; x++) {
+      var a = z * (segmentsX + 1) + x;
+      var b = a + segmentsX + 1;
+      var c = a + 1;
+      var d = b + 1;
+
+      // First triangle
+      indices.push(a, b, c);
+      // Second triangle
+      indices.push(c, b, d);
+    }
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    uvs: new Float32Array(uvs),
+    indices: new Uint16Array(indices)
+  };
+},
+
         computeBoundingBox: function (position, options) {
           options = options || {};
           var geo = options.geo || false;
