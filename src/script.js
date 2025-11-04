@@ -1,4 +1,4 @@
-const skibidi = document.getElementById("skibidi");
+const skibidi = document.getElementById("kuzma");
 let angle = 0;
 let scale = 1;
 setInterval(() => {
