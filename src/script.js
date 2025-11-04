@@ -1,7 +1,6 @@
-const skibidi = document.getElementById("skibidi")!;
+const skibidi = document.getElementById("skibidi");
 let angle = 0;
 let scale = 1;
-
 setInterval(() => {
     skibidi.style.transform = "rotate(" + angle + "deg)";
     angle += 0.1;

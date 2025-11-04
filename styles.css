@@ -7,3 +7,31 @@
     border-color: black;
     border-style: solid;
 }
+
+.navigation {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.navdiv {
+    display: flex;
+    width: 80px;
+    height: 30px;
+    background-color: blue;
+    justify-content: center;
+    align-items: center;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.navtext {
+    margin: 0;
+    display: flex;
+    color: white;
+    text-align: center;
+}
+
+#canvas {
+    width: 600px;
+    height: 400px;
+}
