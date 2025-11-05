@@ -1,6 +1,6 @@
 const canvas = document.getElementById("canvas");
-canvas.width = 1200;
-canvas.height = 800;
+canvas.width = screen.width;
+canvas.height = screen.height;
 
 var pitch = 0;
 var yaw = Math.PI;
@@ -15,15 +15,6 @@ var pressedKeys = {
 	shift: false,
 };
 
-window.addEventListener('beforeunload', function (event) {
-	// Cancel the event
-	event.preventDefault(); 
-	// Chrome requires returnValue to be set
-	event.returnValue = ''; 
-	// For older browsers
-	return ''; 
-});
-
 canvas.addEventListener('click', () => {
 	canvas.requestPointerLock();
 });
@@ -32,14 +23,39 @@ canvas.addEventListener('click', () => {
 document.addEventListener('pointerlockchange', () => {
 	if (document.pointerLockElement === canvas) {
 		console.log('Pointer locked');
+		enterFullscreen();
 		document.addEventListener('mousemove', onMouseMove);
 		document.addEventListener('mousedown', onMouseDown);
 	} else {
 		console.log('Pointer released');
+		exitFullscren();
 		document.removeEventListener('mousemove', onMouseMove);
 		document.removeEventListener('mousedown', onMouseDown);
 	}
 });
+
+function enterFullscreen() {
+	// If not in fullscreen, request fullscreen for the canvas
+	if (canvas.requestFullscreen) {
+		canvas.requestFullscreen();
+	} else if (canvas.webkitRequestFullscreen) { /* Safari */
+		canvas.webkitRequestFullscreen();
+	} else if (canvas.msRequestFullscreen) { /* IE11 */
+		canvas.msRequestFullscreen();
+	}
+}
+function exitFullscren() {
+	// If in fullscreen, exit fullscreen
+	if (document.exitFullscreen) {
+		document.exitFullscreen();
+	} else if (document.webkitExitFullscreen) { /* Safari */
+		document.webkitExitFullscreen();
+	} else if (document.msExitFullscreen) { /* IE11 */
+		document.msExitFullscreen();
+	}
+}
+
+var lastMoveX = 0;
 
 function onMouseMove(e) {
 	// movementX and movementY give relative mouse motion
@@ -59,11 +75,11 @@ function onMouseDown(e) {
 	);
 	const [pos, norm] = raycast(eyePosition, forward);
 	if(e.button == 0) {
-		setVoxel(pos[0], pos[1], pos[2], getBlock("game:air"));
-		generateBuffers(generateMesh());
+		localChunk.set(...pos, getBlock("game:air"));
+		localChunk.generateMesh();
 	} else if (e.button == 2) {
-		setVoxel(pos[0] + norm[0], pos[1] + norm[1], pos[2] + norm[2], getBlock("game:stone"));
-		generateBuffers(generateMesh());
+		localChunk.set(...vec3.add([], pos, norm), getBlock("game:stone"));
+		localChunk.generateMesh();
 	}
 }
 
@@ -88,7 +104,7 @@ function raycast(pos, dir) {
 	var normal = vec3.fromValues(0, 0, 0);
 
 	for(var i = 0; i < 100; i++) {
-		if(outOfBounds(mapPos[0], mapPos[1], mapPos[2]) || blocks[getVoxel(mapPos[0], mapPos[1], mapPos[2])].solid) break;
+		if(localChunk.outOfBounds(...localChunk.getLocalPos(...mapPos)) || blocks[localChunk.get(...mapPos)].solid) break;
 		if (sideDist[0] < sideDist[1]) {
 			if (sideDist[0] < sideDist[2]) {
 				sideDist[0] += deltaDist[0];
@@ -167,164 +183,6 @@ var FAR = 100.0;
 
 var allTextures = getUniqueTexturePaths();
 
-var CHUNK_SIZE = 32;
-var map = new Array(CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE);
-
-for(var z = 0; z < CHUNK_SIZE; z++) {
-	for(var y = 0; y < CHUNK_SIZE; y++) {
-		for(var x = 0; x < CHUNK_SIZE; x++) {
-			var block = getBlock("game:air");
-			if(y < 8) {
-				block = getBlock("game:grass");
-			}
-			if(y < 7) {
-				block = getBlock("game:dirt");
-			}
-			if(y < 5) {
-				block = getBlock("game:stone");
-			}
-			map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = block;
-		}
-	}
-}
-
-function outOfBounds(x, y, z) {
-	return x < 0 || x > CHUNK_SIZE - 1 || y < 0 || y > CHUNK_SIZE - 1 || z < 0 || z > CHUNK_SIZE - 1;
-}
-
-function getVoxel(x, y, z) {
-	if (outOfBounds(x, y, z)) {
-		return getBlock("game:air");
-	}
-	return map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x];
-}
-
-function setVoxel(x, y, z, block) {
-	if (outOfBounds(x, y, z)) {
-		return;
-	}
-	map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = block;
-}
-
-function generateMesh() {
-	const blockVerts = [
-		[0, 0, 0],
-		[1, 0, 0],
-		[1, 1, 0],
-		[0, 1, 0],
-		[0, 0, 1],
-		[1, 0, 1],
-		[1, 1, 1],
-		[0, 1, 1],
-	];
-	const blockNormals = [
-		[0, 0, -1],
-		[0, 0, 1],
-		[0, 1, 0],
-		[0, -1, 0],
-		[-1, 0, 0],
-		[1, 0, 0],
-	];
-	const blockDirections = [
-		"back",
-		"front",
-		"top",
-		"bottom",
-		"left",
-		"right",
-	];
-	const blockQuads = [
-		[0, 3, 1, 2],
-		[5, 6, 4, 7],
-		[3, 7, 2, 6],
-		[1, 5, 0, 4],
-		[4, 7, 0, 3],
-		[1, 2, 5, 6],
-	];
-	const blockUvs = [
-		[0, 0],
-		[0, 1],
-		[1, 0],
-		[1, 1],
-	];
-	var vertices = [];
-	var normals = [];
-	var uvs = [];
-	var textures = [];
-	var indices = [];
-	var vertexIndex = 0;
-	for(var z = 0; z < CHUNK_SIZE; z++) {
-		for(var y = 0; y < CHUNK_SIZE; y++) {
-			for(var x = 0; x < CHUNK_SIZE; x++) {
-				if(!blocks[getVoxel(x, y, z)].hasOwnProperty("textures")) continue;
-				for(var p = 0; p < 6; p++) {
-					if(getVoxel(x + blockNormals[p][0], y + blockNormals[p][1], z + blockNormals[p][2])) {
-						continue;
-					}
-					
-					for(var i = 0; i < 4; i++) {
-						vertices.push(x + blockVerts[blockQuads[p][i]][0]);
-						vertices.push(y + blockVerts[blockQuads[p][i]][1]);
-						vertices.push(z + blockVerts[blockQuads[p][i]][2]);
-						
-						normals.push(blockNormals[p][0]);
-						normals.push(blockNormals[p][1]);
-						normals.push(blockNormals[p][2]);
-						
-						uvs.push(blockUvs[i][0]);
-						uvs.push(blockUvs[i][1]);
-
-						textures.push(allTextures.indexOf(blocks[getVoxel(x, y, z)].textures[blockDirections[p]]));
-					}
-
-					indices.push(vertexIndex);
-					indices.push(vertexIndex + 1);
-					indices.push(vertexIndex + 2);
-					indices.push(vertexIndex + 2);
-					indices.push(vertexIndex + 1);
-					indices.push(vertexIndex + 3);
-					vertexIndex += 4;
-				}
-			}
-		}
-	}
-	return {
-		positions: new Float32Array(vertices),
-		normals: new Float32Array(normals),
-		textures: new Uint8Array(textures),
-		uvs: new Float32Array(uvs),
-		indices: new Uint32Array(indices),
-	};
-}
-
-function generateBuffers(chunk) {
-	gl.bindVertexArray(chunkArray);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, chunk.positions, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-	gl.enableVertexAttribArray(0);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, chunk.uvs, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-	gl.enableVertexAttribArray(1);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, textureBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, chunk.textures, gl.STATIC_DRAW);
-	gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_BYTE, 0, 0);
-	gl.enableVertexAttribArray(2);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, chunk.normals, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
-	gl.enableVertexAttribArray(3);
-
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, chunk.indices, gl.STATIC_DRAW);
-	numIndices = chunk.indices.length;
-}
-
 var numNoisePixels = gl.drawingBufferWidth * gl.drawingBufferHeight;
 var noiseTextureData = new Float32Array(numNoisePixels * 2);
 
@@ -342,6 +200,7 @@ var depthRange = vec2.fromValues(NEAR, FAR);
 
 var colorgeoVsSource =  document.getElementById("vertex-colorgeo").text.trim();
 var colorgeoFsSource =  document.getElementById("fragment-colorgeo").text.trim();
+var transparentFsSource =  document.getElementById("fragment-transparent").text.trim();
 
 var colorgeoVertexShader = gl.createShader(gl.VERTEX_SHADER);
 gl.shaderSource(colorgeoVertexShader, colorgeoVsSource);
@@ -368,6 +227,31 @@ if (!gl.getProgramParameter(colorGeoProgram, gl.LINK_STATUS)) {
     console.error(gl.getProgramInfoLog(colorGeoProgram));
 }
 
+var transparentColorgeoVertexShader = gl.createShader(gl.VERTEX_SHADER);
+gl.shaderSource(transparentColorgeoVertexShader, colorgeoVsSource);
+gl.compileShader(transparentColorgeoVertexShader);
+
+if (!gl.getShaderParameter(transparentColorgeoVertexShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(transparentColorgeoVertexShader));
+}
+
+var transparentFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+gl.shaderSource(transparentFragmentShader, colorgeoFsSource);
+gl.compileShader(transparentFragmentShader);
+
+if (!gl.getShaderParameter(transparentFragmentShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(transparentFragmentShader));
+}
+
+var transparentProgram = gl.createProgram();
+gl.attachShader(transparentProgram, transparentColorgeoVertexShader);
+gl.attachShader(transparentProgram, transparentFragmentShader);
+gl.linkProgram(transparentProgram);
+
+if (!gl.getProgramParameter(transparentProgram, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(transparentProgram));
+}
+
 /////////////////////
 // SSAO PROGRAMS
 /////////////////////
@@ -375,6 +259,7 @@ if (!gl.getProgramParameter(colorGeoProgram, gl.LINK_STATUS)) {
 var quadVsSource =  document.getElementById("vertex-quad").text.trim();
 var ssaoFsSource = document.getElementById("fragment-ssao").text.trim();
 var aoBlendFsSource = document.getElementById("fragment-aoblend").text.trim();
+var depthFsSource = document.getElementById("fragment-depth").text.trim();
 var noSSAOFsSource = document.getElementById("fragment-color").text.trim();
 
 var quadVertexShader = gl.createShader(gl.VERTEX_SHADER);
@@ -399,6 +284,14 @@ gl.compileShader(aoBlendFragmentShader);
 
 if (!gl.getShaderParameter(aoBlendFragmentShader, gl.COMPILE_STATUS)) {
     console.error(gl.getShaderInfoLog(aoBlendFragmentShader));
+}
+
+var depthFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+gl.shaderSource(depthFragmentShader, depthFsSource);
+gl.compileShader(depthFragmentShader);
+
+if (!gl.getShaderParameter(depthFragmentShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(depthFragmentShader));
 }
 
 var noSSAOFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -429,6 +322,15 @@ if (!gl.getProgramParameter(aoBlendProgram, gl.LINK_STATUS)) {
     console.error(gl.getProgramInfoLog(aoBlendProgram));
 }
 
+var depthProgram = gl.createProgram();
+gl.attachShader(depthProgram, quadVertexShader);
+gl.attachShader(depthProgram, depthFragmentShader);
+gl.linkProgram(depthProgram);
+
+if (!gl.getProgramParameter(depthProgram, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(depthProgram));
+}
+
 // SSAO disabled
 var noSSAOProgram = gl.createProgram();
 gl.attachShader(noSSAOProgram, quadVertexShader);
@@ -446,8 +348,14 @@ if (!gl.getProgramParameter(noSSAOProgram, gl.LINK_STATUS)) {
 var sceneUniformsLocation = gl.getUniformBlockIndex(colorGeoProgram, "SceneUniforms");
 gl.uniformBlockBinding(colorGeoProgram, sceneUniformsLocation, 0);
 
+var transparentSceneUniformsLocation = gl.getUniformBlockIndex(transparentProgram, "SceneUniforms");
+gl.uniformBlockBinding(transparentProgram, transparentSceneUniformsLocation, 0);
+
 var modelMatrixLocation = gl.getUniformLocation(colorGeoProgram, "uModel");
 var textureLocation = gl.getUniformLocation(colorGeoProgram, "uTexture");
+
+var transparentModelMatrixLocation = gl.getUniformLocation(transparentProgram, "uModel");
+var transparentTextureLocation = gl.getUniformLocation(transparentProgram, "uTexture");
 
 var ssaoUniformsLocation = gl.getUniformBlockIndex(ssaoProgram, "SSAOUniforms");
 gl.uniformBlockBinding(ssaoProgram, ssaoUniformsLocation, 1);
@@ -458,6 +366,8 @@ var noiseBufferLocation = gl.getUniformLocation(ssaoProgram, "uNoiseBuffer");
 
 var colorBufferLocation = gl.getUniformLocation(aoBlendProgram, "uColorBuffer");
 var occlustionBufferLocation = gl.getUniformLocation(aoBlendProgram, "uOcclusionBuffer");
+
+var depthBufferLocation = gl.getUniformLocation(depthProgram, "uDepthBuffer");
 
 var noSSAOColorBufferLocation = gl.getUniformLocation(noSSAOProgram, "uColorBuffer");
 
@@ -509,7 +419,7 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT16, gl.drawingBufferWidth, gl.drawingBufferHeight);
 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTarget, 0);
 
-    gl.drawBuffers([
+gl.drawBuffers([
     gl.COLOR_ATTACHMENT0,
     gl.COLOR_ATTACHMENT1,
     gl.COLOR_ATTACHMENT2
@@ -545,7 +455,9 @@ var normalBuffer = gl.createBuffer();
 var indices = gl.createBuffer();
 var numIndices;
 
-generateBuffers(generateMesh());
+const localChunk = new chunk(0, 0, 0);
+localChunk.generate();
+localChunk.generateMesh();
 
 // Quad for screen-space passes
 var quadArray = gl.createVertexArray();
@@ -589,6 +501,10 @@ var sceneUniformBuffer = gl.createBuffer();
 gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
 gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
+var transparentSceneUniformBuffer = gl.createBuffer();
+gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, transparentSceneUniformBuffer);
+gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
 var ssaoUniformData = new Float32Array(8);
 ssaoUniformData[0] = 16.0; // sample radius
 ssaoUniformData[1] = 0.04; // bias
@@ -614,8 +530,8 @@ async function loadImage(url) {
 async function loadImagesInChunks(urls, chunkSize = 100) {
   const result = [];
   for (let i = 0; i < urls.length; i += chunkSize) {
-    const chunk = urls.slice(i, i + chunkSize);
-    const imgs = await Promise.all(chunk.map(loadImage));
+    const slice = urls.slice(i, i + chunkSize);
+    const imgs = await Promise.all(slice.map(loadImage));
     result.push(...imgs);
     await new Promise(r => requestAnimationFrame(r)); // yield to browser
   }
@@ -702,13 +618,15 @@ async function main() {
 
 	gl.activeTexture(gl.TEXTURE5);
 	gl.bindTexture(gl.TEXTURE_2D, occlusionTarget);
+	
+	gl.activeTexture(gl.TEXTURE6);
+	gl.bindTexture(gl.TEXTURE_2D, depthTarget);
 
 	gl.useProgram(colorGeoProgram);
 	gl.uniform1i(textureLocation, 0);
 
-	var modelMatrix = mat4.create();
-	mat4.identity(modelMatrix);
-	gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
+	gl.useProgram(transparentProgram);
+	gl.uniform1i(transparentTextureLocation, 0);
 
 	gl.useProgram(ssaoProgram);
 	gl.uniform1i(positionBufferLocation, 3);
@@ -718,6 +636,9 @@ async function main() {
 	gl.useProgram(aoBlendProgram);
 	gl.uniform1i(colorBufferLocation, 2);
 	gl.uniform1i(occlustionBufferLocation, 5);
+
+	gl.useProgram(depthProgram);
+	gl.uniform1i(depthBufferLocation, 6);
 
 	gl.useProgram(noSSAOProgram);
 	gl.uniform1i(noSSAOColorBufferLocation, 2);
@@ -757,6 +678,10 @@ async function main() {
 		if(pressedKeys.shift) {
 			eyePosition[1] -= speed*dt;
 		}
+		
+		gl.bindFramebuffer(gl.FRAMEBUFFER, colorGeoBuffer);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.useProgram(colorGeoProgram);
 
 		var viewMatrix = calculateViewMatrix();
 		
@@ -769,12 +694,7 @@ async function main() {
 		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
 		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
-		gl.bindFramebuffer(gl.FRAMEBUFFER, colorGeoBuffer);
-		gl.useProgram(colorGeoProgram);
-		gl.bindVertexArray(chunkArray);
-
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		gl.drawElements(gl.TRIANGLES, numIndices, gl.UNSIGNED_INT, 0);
+		localChunk.render();
 
 		gl.bindVertexArray(quadArray);
 
@@ -793,6 +713,21 @@ async function main() {
 		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 		gl.useProgram(aoBlendProgram);
 		gl.drawArrays(gl.TRIANGLES, 0, 6);
+		
+		gl.useProgram(depthProgram);
+		gl.depthFunc(gl.ALWAYS);
+		gl.depthMask(true);
+		gl.colorMask(false, false, false, false);
+		gl.drawArrays(gl.TRIANGLES, 0, 6);
+		gl.colorMask(true, true, true, true);
+		gl.depthFunc(gl.LESS);
+		
+		gl.useProgram(transparentProgram);
+		gl.depthMask(false);
+		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, transparentSceneUniformBuffer);
+		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+		localChunk.renderTransparent();
+		gl.depthMask(true);
 
 		requestAnimationFrame(draw);
 		lastTime = now;

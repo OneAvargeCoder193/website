@@ -13,7 +13,9 @@
         <link rel="stylesheet" href="styles.css">
         <script src="src/gl-matrix.js"></script>
         <script src="src/utils.js"></script>
+        <script src="src/perlin.js"></script>
         <script src="src/blocks.js"></script>
+        <script src="src/chunk.js"></script>
     </head>
     <body>
         <!--[if lt IE 7]>
@@ -34,7 +36,6 @@
 			layout(location=1) in vec2 uv;
 			layout(location=2) in uint blockTexture;
 			layout(location=3) in vec3 normal;
-			layout(location=4) in vec4 color;
 			
 			uniform SceneUniforms {
 				mat4 uViewMatrix;
@@ -60,6 +61,45 @@
 				vViewNormal = uViewMatrix * vNormal;
 				vTexture = blockTexture;
 				gl_Position = uProjection * vViewPosition;
+			}
+		</script>
+		<script type="x-shader/fs" id="fragment-transparent">
+			#version 300 es
+			precision highp float;
+			precision highp sampler2DArray;
+
+			layout(std140, column_major) uniform;
+
+			uniform SceneUniforms {
+				mat4 uViewMatrix;
+				mat4 uProjection;
+				vec4 uEyePosition;
+				vec4 uLightDirection;
+			};
+
+			uniform sampler2DArray uTexture;
+			
+			in vec4 vPosition;
+			in vec2 vUV;
+			in vec4 vNormal;
+			in vec4 vViewPosition;
+			in vec4 vViewNormal;
+			flat in uint vTexture;
+
+			layout(location=0) out vec4 color;
+
+			void main() {
+				vec3 position = vPosition.xyz;
+				vec3 normal = normalize(vNormal.xyz);
+				vec2 uv = vUV;
+
+				vec4 baseColor = texture(uTexture, vec3(uv, vTexture));
+				vec3 eyeDirection = normalize(uEyePosition.xyz - position);
+				vec3 lightVec = uLightDirection.xyz;
+				vec3 lightDirection = normalize(lightVec);
+				vec3 reflectionDirection = reflect(-lightDirection, normal);
+				float light = pow(max(dot(lightDirection, normal), 0.1), 0.4545);
+				color = vec4(light * baseColor.rgb, baseColor.a);
 			}
 		</script>
 		<script type="x-shader/fs" id="fragment-colorgeo">
@@ -100,7 +140,7 @@
 				vec3 lightDirection = normalize(lightVec);
 				vec3 reflectionDirection = reflect(-lightDirection, normal);
 				float light = pow(max(dot(lightDirection, normal), 0.1), 0.4545);
-				color = vec4(light * baseColor.rgb, 1.0);
+				color = vec4(light * baseColor.rgb, baseColor.a);
 				viewPosition = vViewPosition;
 				viewNormal = vViewNormal;
 			}
@@ -189,6 +229,17 @@
 			void main() {
 				ivec2 fragCoord = ivec2(gl_FragCoord.xy);
 				color = vec4(clamp(texelFetch(uColorBuffer, fragCoord, 0).rgb - texelFetch(uOcclusionBuffer, fragCoord, 0).r, 0.0, 1.0), 1.0);
+			}
+		</script>
+		<script type="x-shader/fs" id="fragment-depth">
+			#version 300 es
+			precision highp float;
+
+			uniform sampler2D uDepthBuffer;
+
+			void main() {
+				ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+				gl_FragDepth = texelFetch(uDepthBuffer, fragCoord, 0).r;
 			}
 		</script>
 		<script type="x-shader/fs" id="fragment-color">
