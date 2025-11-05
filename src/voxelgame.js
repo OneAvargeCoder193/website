@@ -1,6 +1,143 @@
 const canvas = document.getElementById("canvas");
-canvas.width = 600;
-canvas.height = 400;
+canvas.width = 1200;
+canvas.height = 800;
+
+var pitch = 0;
+var yaw = Math.PI;
+var sensitivity = 0.002;
+var eyePosition = vec3.fromValues(16, 16, -8);
+var pressedKeys = {
+	w: false,
+	a: false,
+	s: false,
+	d: false,
+	space: false,
+	shift: false,
+};
+
+canvas.addEventListener('click', () => {
+	canvas.requestPointerLock();
+});
+
+// When pointer is locked, capture mouse movement
+document.addEventListener('pointerlockchange', () => {
+	if (document.pointerLockElement === canvas) {
+		console.log('Pointer locked');
+		document.addEventListener('mousemove', onMouseMove);
+		document.addEventListener('mousedown', onMouseDown);
+	} else {
+		console.log('Pointer released');
+		document.removeEventListener('mousemove', onMouseMove);
+		document.removeEventListener('mousedown', onMouseDown);
+	}
+});
+
+function onMouseMove(e) {
+	// movementX and movementY give relative mouse motion
+	yaw -= e.movementX * sensitivity;
+	pitch -= e.movementY * sensitivity;
+
+	// Clamp pitch to prevent flipping
+	const maxPitch = Math.PI / 2;
+	pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+}
+
+function onMouseDown(e) {
+	const forward = vec3.fromValues(
+		-Math.cos(pitch) * Math.sin(yaw),
+		Math.sin(pitch),
+		-Math.cos(pitch) * Math.cos(yaw),
+	);
+	const [pos, norm] = raycast(eyePosition, forward);
+	if(e.button == 0) {
+		setVoxel(pos[0], pos[1], pos[2], false);
+		generateBuffers(generateMesh());
+	} else if (e.button == 2) {
+		setVoxel(pos[0] + norm[0], pos[1] + norm[1], pos[2] + norm[2], true);
+		generateBuffers(generateMesh());
+	}
+}
+
+function raycast(pos, dir) {
+	function abs(out, a) {
+		out[0] = Math.abs(a[0]);
+		out[1] = Math.abs(a[1]);
+		out[2] = Math.abs(a[2]);
+		return out;
+	}
+	var deltaDist = abs([], vec3.inverse([], dir));
+	var rayStep = vec3.fromValues(Math.sign(dir[0]), Math.sign(dir[1]), Math.sign(dir[2]));
+	var mapPos = vec3.floor([], pos);
+	let sideDist = vec3.create();
+	for (let i = 0; i < 3; i++) {
+		if (dir[i] < 0) {
+			sideDist[i] = (pos[i] - mapPos[i]) * deltaDist[i];
+		} else {
+			sideDist[i] = (mapPos[i] + 1.0 - pos[i]) * deltaDist[i];
+		}
+	}
+	var normal = vec3.fromValues(0, 0, 0);
+
+	for(var i = 0; i < 100; i++) {
+		if(getVoxel(mapPos[0], mapPos[1], mapPos[2]) || outOfBounds(mapPos[0], mapPos[1], mapPos[2])) break;
+		if (sideDist[0] < sideDist[1]) {
+			if (sideDist[0] < sideDist[2]) {
+				sideDist[0] += deltaDist[0];
+				mapPos[0] += rayStep[0];
+				normal = [1, 0, 0];
+			} else {
+				sideDist[2] += deltaDist[2];
+				mapPos[2] += rayStep[2];
+				normal = [0, 0, 1];
+			}
+		} else {
+			if (sideDist[1] < sideDist[2]) {
+				sideDist[1] += deltaDist[1];
+				mapPos[1] += rayStep[1];
+				normal = [0, 1, 0];
+			} else {
+				sideDist[2] += deltaDist[2];
+				mapPos[2] += rayStep[2];
+				normal = [0, 0, 1];
+			}
+		}
+	}
+
+	vec3.mul(normal, normal, rayStep);
+	vec3.negate(normal, normal);
+	return [mapPos, normal];
+}
+
+function calculateViewMatrix() {
+	var view = mat4.create();
+	mat4.rotateX(view, view, -pitch);
+	mat4.rotateY(view, view, -yaw);
+	mat4.translate(view, view, vec3.negate([], eyePosition));
+	return view;
+}
+
+document.addEventListener('keydown', (e) => {
+	e.keyCode
+	switch(e.key) {
+		case 'w': case 'W': pressedKeys.w = true; break;
+		case 'a': case 'A': pressedKeys.a = true; break;
+		case 's': case 'S': pressedKeys.s = true; break;
+		case 'd': case 'D': pressedKeys.d = true; break;
+		case ' ': pressedKeys.space = true; break;
+		case 'Shift': pressedKeys.shift = true; break;
+	}
+});
+
+document.addEventListener('keyup', (e) => {
+	switch(e.key) {
+		case 'w': case 'W': pressedKeys.w = false; break;
+		case 'a': case 'A': pressedKeys.a = false; break;
+		case 's': case 'S': pressedKeys.s = false; break;
+		case 'd': case 'D': pressedKeys.d = false; break;
+		case ' ': pressedKeys.space = false; break;
+		case 'Shift': pressedKeys.shift = false; break;
+	}
+});
 
 var gl = canvas.getContext("webgl2");
 if (!gl) {
@@ -13,26 +150,143 @@ if (!gl.getExtension("EXT_color_buffer_float")) {
 }
 
 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-gl.clearColor(0.0, 0.0, 0.0, 1.0)
+gl.clearColor(0.25, 0.765625, 1, 1.0);
 gl.enable(gl.DEPTH_TEST);
 
 var NEAR = 0.1;
 var FAR = 100.0;
 
-const allLetters = ['assets/letters\\wm9o773m.png', 'assets/letters\\taikesfx.png', 'assets/letters\\2mzrq4ut.png', 'assets/letters\\8fpjftq9.png', 'assets/letters\\jar2k77e.png', 'assets/letters\\fiu58s3h.png', 'assets/letters\\rb10fhiw.png', 'assets/letters\\voqeixm0.png', 'assets/letters\\civ4rybq.png', 'assets/letters\\concvjef.png', 'assets/letters\\k2q9w4np.png', 'assets/letters\\v5r2s696.png', 'assets/letters\\hynqsp5d.png', 'assets/letters\\14ceqlu1.png', 'assets/letters\\qxl40fl2.png', 'assets/letters\\roi074a6.png', 'assets/letters\\u4oh49gc.png', 'assets/letters\\95cpf7ox.png', 'assets/letters\\4ntt305e.png', 'assets/letters\\zqg7zkhw.png', 'assets/letters\\zvaeakq3.png', 'assets/letters\\j0g3fptc.png', 'assets/letters\\b6uwypvj.png', 'assets/letters\\y0mwt13x.png', 'assets/letters\\cdmjfrz1.png', 'assets/letters\\jcohhvkz.png', 'assets/letters\\j1bnygzl.png', 'assets/letters\\anx5gllq.png', 'assets/letters\\1fd7wlmb.png', 'assets/letters\\hgu64n3z.png', 'assets/letters\\63khde32.png', 'assets/letters\\4vh0sk5l.png', 'assets/letters\\f1vn9lv6.png', 'assets/letters\\1bi3oqdt.png', 'assets/letters\\empi7ng5.png', 'assets/letters\\f5e9tjsd.png', 'assets/letters\\ljwmbq1g.png', 'assets/letters\\pw9h9za0.png', 'assets/letters\\ckys5tmu.png', 'assets/letters\\vms2phxr.png', 'assets/letters\\q078mvha.png', 'assets/letters\\ugreq3lc.png', 'assets/letters\\8zrz0jfc.png', 'assets/letters\\o7tlm957.png', 'assets/letters\\4fkvvj6z.png', 'assets/letters\\emsv4xlf.png', 'assets/letters\\etamtp2p.png', 'assets/letters\\im23tzxk.png', 'assets/letters\\lbeifgz6.png', 'assets/letters\\qxou4cs3.png', 'assets/letters\\zxpkcenu.png', 'assets/letters\\d0mllnn8.png', 'assets/letters\\84j0th0d.png', 'assets/letters\\i001i9sr.png', 'assets/letters\\fcdxq8vu.png', 'assets/letters\\6b6mn37h.png', 'assets/letters\\apn23fv1.png', 'assets/letters\\rnd1avf4.png', 'assets/letters\\reydqte6.png', 'assets/letters\\ulgouxmq.png', 'assets/letters\\1g84akyl.png', 'assets/letters\\og2idjl3.png', 'assets/letters\\trbj4s52.png', 'assets/letters\\zm697e8z.png', 'assets/letters\\d0cx9oxb.png', 'assets/letters\\z4ru1uvg.png', 'assets/letters\\zcul1o73.png', 'assets/letters\\4te00srk.png', 'assets/letters\\s70ye0oc.png', 'assets/letters\\fih247t9.png', 'assets/letters\\s8inkc10.png', 'assets/letters\\dms5105c.png', 'assets/letters\\z63uiofj.png', 'assets/letters\\wp66ci87.png', 'assets/letters\\6ro2apsz.png', 'assets/letters\\137z4q03.png', 'assets/letters\\1cb53qj6.png', 'assets/letters\\mx3gzkza.png', 'assets/letters\\j7ba1t3k.png', 'assets/letters\\oi9bmcvc.png', 'assets/letters\\ryv5ilmi.png', 'assets/letters\\gv8y7k4x.png', 'assets/letters\\544ncdin.png', 'assets/letters\\dy5drsyl.png', 'assets/letters\\jnaefc7x.png', 'assets/letters\\ahr1j1a1.png', 'assets/letters\\cmo4cn0s.png', 'assets/letters\\cnf6uejp.png', 'assets/letters\\0b8hkekw.png', 'assets/letters\\2nnhzzhu.png', 'assets/letters\\f78m0niu.png', 'assets/letters\\v9h327si.png', 'assets/letters\\c5ihdyxh.png', 'assets/letters\\q4w1uyus.png', 'assets/letters\\hpvlalle.png', 'assets/letters\\1faxjx2x.png', 'assets/letters\\r99y465i.png', 'assets/letters\\agk9l0o9.png', 'assets/letters\\y7vy64eq.png', 'assets/letters\\9vbah65i.png', 'assets/letters\\o8tdf78x.png', 'assets/letters\\077xe9cz.png', 'assets/letters\\n9p3ftdf.png', 'assets/letters\\ofmtsini.png', 'assets/letters\\wwkjtj6l.png', 'assets/letters\\dsfb3j4h.png', 'assets/letters\\1wuzgw7r.png', 'assets/letters\\2hrhdqpo.png', 'assets/letters\\1atzkj7t.png', 'assets/letters\\m6ir8hkz.png', 'assets/letters\\uy5a9afy.png', 'assets/letters\\74t6h4s1.png', 'assets/letters\\u787xk7a.png', 'assets/letters\\ltcnusel.png', 'assets/letters\\mzq6ctlv.png', 'assets/letters\\pdhn6ywv.png', 'assets/letters\\t6ecz9re.png', 'assets/letters\\h83ussg5.png', 'assets/letters\\zig6gjww.png', 'assets/letters\\q9dgsnsq.png', 'assets/letters\\p9lkb9dj.png', 'assets/letters\\40tds659.png', 'assets/letters\\euqzp66l.png', 'assets/letters\\4ulhs7ke.png', 'assets/letters\\0h2oxyhm.png', 'assets/letters\\rfdw77b2.png', 'assets/letters\\51nc96yy.png', 'assets/letters\\vvbudp08.png', 'assets/letters\\ne6a09kr.png', 'assets/letters\\ms4f0cob.png', 'assets/letters\\7idlxs3b.png', 'assets/letters\\ug2akurm.png', 'assets/letters\\0lef2h3r.png', 'assets/letters\\1czcnf29.png', 'assets/letters\\cj61trx5.png', 'assets/letters\\pmm01vcq.png', 'assets/letters\\eedegids.png', 'assets/letters\\973ium0m.png', 'assets/letters\\yf8e3p3o.png', 'assets/letters\\e2hmljw9.png', 'assets/letters\\y8s6ruue.png', 'assets/letters\\wqnbu68k.png', 'assets/letters\\oi07dkyn.png', 'assets/letters\\l7hceeh6.png', 'assets/letters\\4bdseb71.png', 'assets/letters\\dzuij95a.png', 'assets/letters\\4fopxiku.png', 'assets/letters\\pcivrda4.png', 'assets/letters\\9g22nvzx.png', 'assets/letters\\3oc910gr.png', 'assets/letters\\nfg5mbs1.png', 'assets/letters\\fpd9k2aw.png', 'assets/letters\\1tbtl2ut.png', 'assets/letters\\ufqub5nm.png', 'assets/letters\\u1spor9z.png', 'assets/letters\\3ds9csmr.png', 'assets/letters\\whkk4ia2.png', 'assets/letters\\idt524uv.png', 'assets/letters\\8xvvmrq7.png', 'assets/letters\\pssj7m9b.png', 'assets/letters\\o4ftfd1t.png', 'assets/letters\\opnhojkt.png', 'assets/letters\\xfxa53fj.png', 'assets/letters\\wd8e22v0.png', 'assets/letters\\4nrsckns.png', 'assets/letters\\zg0fhi50.png'];
+var allTextures = ['assets/textures/stone.png']
 
-var NUM_SPHERES = allLetters.length;
-var spheres = new Array(NUM_SPHERES);
+var CHUNK_SIZE = 32;
+var map = new Array(CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE);
 
-var modelMatrixData = new Float32Array(NUM_SPHERES * 16);
+for(var z = 0; z < CHUNK_SIZE; z++) {
+	for(var y = 0; y < CHUNK_SIZE; y++) {
+		for(var x = 0; x < CHUNK_SIZE; x++) {
+			map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = y<8;
+		}
+	}
+}
 
-for (var i = 0; i < NUM_SPHERES; ++i) {
-    spheres[i] = {
-        scale: [1, 1, 1],
-        rotate: [0, 0, 0], // Will be used for global rotation
-        translate: [0, 0, 0],
-        modelMatrix: mat4.create()
-    };
+function outOfBounds(x, y, z) {
+	return x < 0 || x > CHUNK_SIZE - 1 || y < 0 || y > CHUNK_SIZE - 1 || z < 0 || z > CHUNK_SIZE - 1;
+}
+
+function getVoxel(x, y, z) {
+	if (outOfBounds(x, y, z)) {
+		return false;
+	}
+	return map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x];
+}
+
+function setVoxel(x, y, z, block) {
+	if (outOfBounds(x, y, z)) {
+		return;
+	}
+	map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = block;
+}
+
+function generateMesh() {
+	const blockVerts = [
+		[0, 0, 0],
+		[1, 0, 0],
+		[1, 1, 0],
+		[0, 1, 0],
+		[0, 0, 1],
+		[1, 0, 1],
+		[1, 1, 1],
+		[0, 1, 1],
+	];
+	const blockNormals = [
+		[0, 0, -1],
+		[0, 0, 1],
+		[0, 1, 0],
+		[0, -1, 0],
+		[-1, 0, 0],
+		[1, 0, 0],
+	];
+	const blockQuads = [
+		[0, 3, 1, 2],
+		[5, 6, 4, 7],
+		[3, 7, 2, 6],
+		[1, 5, 0, 4],
+		[4, 7, 0, 3],
+		[1, 2, 5, 6],
+	];
+	const blockUvs = [
+		[0, 0],
+		[0, 1],
+		[1, 0],
+		[1, 1],
+	];
+	var vertices = [];
+	var normals = [];
+	var uvs = [];
+	var indices = [];
+	var vertexIndex = 0;
+	for(var z = 0; z < CHUNK_SIZE; z++) {
+		for(var y = 0; y < CHUNK_SIZE; y++) {
+			for(var x = 0; x < CHUNK_SIZE; x++) {
+				if(!getVoxel(x, y, z)) continue;
+				for(var p = 0; p < 6; p++) {
+					if(getVoxel(x + blockNormals[p][0], y + blockNormals[p][1], z + blockNormals[p][2])) {
+						continue;
+					}
+					
+					for(var i = 0; i < 4; i++) {
+						vertices.push(x + blockVerts[blockQuads[p][i]][0]);
+						vertices.push(y + blockVerts[blockQuads[p][i]][1]);
+						vertices.push(z + blockVerts[blockQuads[p][i]][2]);
+						
+						normals.push(blockNormals[p][0]);
+						normals.push(blockNormals[p][1]);
+						normals.push(blockNormals[p][2]);
+						
+						uvs.push(blockUvs[i][0]);
+						uvs.push(blockUvs[i][1]);
+					}
+
+					indices.push(vertexIndex);
+					indices.push(vertexIndex + 1);
+					indices.push(vertexIndex + 2);
+					indices.push(vertexIndex + 2);
+					indices.push(vertexIndex + 1);
+					indices.push(vertexIndex + 3);
+					vertexIndex += 4;
+				}
+			}
+		}
+	}
+	return {
+		positions: new Float32Array(vertices),
+		normals: new Float32Array(normals),
+		uvs: new Float32Array(uvs),
+		indices: new Uint32Array(indices),
+	};
+}
+
+function generateBuffers(chunk) {
+	gl.bindVertexArray(chunkArray);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, chunk.positions, gl.STATIC_DRAW);
+	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(0);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, chunk.uvs, gl.STATIC_DRAW);
+	gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(1);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, chunk.normals, gl.STATIC_DRAW);
+	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(2);
+
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, chunk.indices, gl.STATIC_DRAW);
+	numIndices = chunk.indices.length;
 }
 
 var numNoisePixels = gl.drawingBufferWidth * gl.drawingBufferHeight;
@@ -158,7 +412,6 @@ gl.uniformBlockBinding(colorGeoProgram, sceneUniformsLocation, 0);
 
 var modelMatrixLocation = gl.getUniformLocation(colorGeoProgram, "uModel");
 var textureLocation = gl.getUniformLocation(colorGeoProgram, "uTexture");
-var timeLocation = gl.getUniformLocation(colorGeoProgram, "uTime");
 
 var ssaoUniformsLocation = gl.getUniformBlockIndex(ssaoProgram, "SSAOUniforms");
 gl.uniformBlockBinding(ssaoProgram, ssaoUniformsLocation, 1);
@@ -245,52 +498,17 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 // SET UP GEOMETRY
 /////////////////////
 
-var chunk = utils.createPlane({size: [1, 5], resolution: [20, 1], position: [0.5, 0, 0]});
-var numVertices = chunk.positions.length / 3;
 
 var chunkArray = gl.createVertexArray();
 gl.bindVertexArray(chunkArray);
 
 var positionBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, chunk.positions, gl.STATIC_DRAW);
-gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-gl.enableVertexAttribArray(0);
-
 var uvBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, chunk.uvs, gl.STATIC_DRAW);
-gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-gl.enableVertexAttribArray(1);
-
 var normalBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, chunk.normals, gl.STATIC_DRAW);
-gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-gl.enableVertexAttribArray(2);
-
-// Columns of matrix as separate attributes for instancing
-var matrixBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, modelMatrixData, gl.DYNAMIC_DRAW);
-gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 64, 0);
-gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 64, 16);
-gl.vertexAttribPointer(6, 4, gl.FLOAT, false, 64, 32);
-gl.vertexAttribPointer(7, 4, gl.FLOAT, false, 64, 48);
-
-gl.vertexAttribDivisor(4, 1);
-gl.vertexAttribDivisor(5, 1);
-gl.vertexAttribDivisor(6, 1);
-gl.vertexAttribDivisor(7, 1);
-
-gl.enableVertexAttribArray(4);
-gl.enableVertexAttribArray(5);
-gl.enableVertexAttribArray(6);
-gl.enableVertexAttribArray(7);
-
 var indices = gl.createBuffer();
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, chunk.indices, gl.STATIC_DRAW);
+var numIndices;
+
+generateBuffers(generateMesh());
 
 // Quad for screen-space passes
 var quadArray = gl.createVertexArray();
@@ -316,14 +534,12 @@ gl.enableVertexAttribArray(0);
 var projMatrix = mat4.create();
 mat4.perspective(projMatrix, Math.PI / 2, canvas.width / canvas.height, NEAR, FAR);
 
-var viewMatrix = mat4.create();
-var eyePosition = vec3.fromValues(0, 6, 4);
-mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 2, 0), vec3.fromValues(0, 1, 0));
+var viewMatrix = calculateViewMatrix();
 
 var viewProjMatrix = mat4.create();
 mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-var lightPosition = vec3.fromValues(0, 6, 0);
+var lightPosition = vec3.fromValues(16, 48, 16);
 
 var sceneUniformData = new Float32Array(40);
 sceneUniformData.set(viewMatrix);
@@ -406,8 +622,8 @@ async function createTextureArray(gl, imageURLs) {
   });
 
   // Set texture parameters
-  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -417,10 +633,11 @@ async function createTextureArray(gl, imageURLs) {
 }
 
 const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS);
-console.log(allLetters.length + '/' + maxLayers);
+
+var lastTime;
 
 async function main() {
-	var textureArray = await createTextureArray(gl, allLetters);
+	var textureArray = await createTextureArray(gl, allTextures);
 	gl.activeTexture(gl.TEXTURE0);
 	gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
 
@@ -451,6 +668,10 @@ async function main() {
 	gl.useProgram(colorGeoProgram);
 	gl.uniform1i(textureLocation, 0);
 
+	var modelMatrix = mat4.create();
+	mat4.identity(modelMatrix);
+	gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
+
 	gl.useProgram(ssaoProgram);
 	gl.uniform1i(positionBufferLocation, 3);
 	gl.uniform1i(normalBufferLocation, 4);
@@ -463,29 +684,59 @@ async function main() {
 	gl.useProgram(noSSAOProgram);
 	gl.uniform1i(noSSAOColorBufferLocation, 2);
 
-	function draw(timestamp) {
+	function draw(now) {
+		if (!lastTime) { lastTime = now; }
+		var dt = (now - lastTime)/1000.0;
 		////////////////////
 		// DRAW BOXES
 		////////////////////
+
+		var speed = 4;
+
+		if(pressedKeys.w) {
+			const forw = vec2.fromValues(-Math.sin(yaw)*speed*dt, -Math.cos(yaw)*speed*dt);
+			eyePosition[0] += forw[0];
+			eyePosition[2] += forw[1];
+		}
+		if(pressedKeys.s) {
+			const forw = vec2.fromValues(-Math.sin(yaw)*speed*dt, -Math.cos(yaw)*speed*dt);
+			eyePosition[0] -= forw[0];
+			eyePosition[2] -= forw[1];
+		}
+		if(pressedKeys.d) {
+			const forw = vec2.fromValues(Math.sin(yaw + Math.PI / 2)*speed*dt, Math.cos(yaw + Math.PI / 2)*speed*dt);
+			eyePosition[0] += forw[0];
+			eyePosition[2] += forw[1];
+		}
+		if(pressedKeys.a) {
+			const forw = vec2.fromValues(Math.sin(yaw + Math.PI / 2)*speed*dt, Math.cos(yaw + Math.PI / 2)*speed*dt);
+			eyePosition[0] -= forw[0];
+			eyePosition[2] -= forw[1];
+		}
+		if(pressedKeys.space) {
+			eyePosition[1] += speed*dt;
+		}
+		if(pressedKeys.shift) {
+			eyePosition[1] -= speed*dt;
+		}
+
+		var viewMatrix = calculateViewMatrix();
+		
+		var sceneUniformData = new Float32Array(40);
+		sceneUniformData.set(viewMatrix);
+		sceneUniformData.set(projMatrix, 16);
+		sceneUniformData.set(eyePosition, 32);
+		sceneUniformData.set(lightPosition, 36);
+
+		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
 		gl.bindFramebuffer(gl.FRAMEBUFFER, colorGeoBuffer);
 		gl.useProgram(colorGeoProgram);
 		gl.bindVertexArray(chunkArray);
 
-		gl.uniform1f(timeLocation, timestamp / 1000);
-
-		for (var i = 0, len = spheres.length; i < len; ++i) {
-			utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
-			mat4.fromYRotation(rotationMatrix, spheres[i].rotate[1]);
-			mat4.multiply(spheres[i].modelMatrix, rotationMatrix, spheres[i].modelMatrix);
-
-			modelMatrixData.set(spheres[i].modelMatrix, i * 16);
-		}
-
-		gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
-		gl.bufferSubData(gl.ARRAY_BUFFER, 0, modelMatrixData);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		gl.drawElementsInstanced(gl.TRIANGLES, chunk.indices.length, gl.UNSIGNED_SHORT, 0, spheres.length);
+		gl.drawElements(gl.TRIANGLES, numIndices, gl.UNSIGNED_INT, 0);
 
 		gl.bindVertexArray(quadArray);
 
@@ -506,6 +757,7 @@ async function main() {
 		gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 		requestAnimationFrame(draw);
+		lastTime = now;
 	}
 
 	requestAnimationFrame(draw);
