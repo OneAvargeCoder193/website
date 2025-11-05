@@ -82,10 +82,10 @@ function onMouseDown(e) {
 	const [pos, norm] = raycast(eyePosition, forward);
 	if(e.button == 0) {
 		localChunk.set(...pos, getBlock("game:air"));
-		localChunk.generateMesh();
+		localChunk.generateMesh(eyePosition);
 	} else if (e.button == 2) {
-		localChunk.set(...vec3.add([], pos, norm), getBlock("game:stone"));
-		localChunk.generateMesh();
+		localChunk.set(...vec3.add([], pos, norm), getBlock("game:leaves"));
+		localChunk.generateMesh(eyePosition);
 	}
 }
 
@@ -463,7 +463,7 @@ var numIndices;
 
 const localChunk = new chunk(0, 0, 0);
 localChunk.generate();
-localChunk.generateMesh();
+localChunk.generateMesh(eyePosition);
 
 // Quad for screen-space passes
 var quadArray = gl.createVertexArray();
@@ -595,6 +595,7 @@ async function createTextureArray(gl, imageURLs) {
 const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS);
 
 var lastTime;
+var lastPosBlock = vec3.create();
 
 async function main() {
 	var textureArray = await createTextureArray(gl, allTextures);
@@ -683,6 +684,11 @@ async function main() {
 		}
 		if(pressedKeys.shift) {
 			eyePosition[1] -= speed*dt;
+		}
+
+		if(!vec3.equals(vec3.floor([], eyePosition), lastPosBlock)) {
+			localChunk.generateTransparent(eyePosition);
+			lastPosBlock = vec3.floor([], eyePosition);
 		}
 		
 		gl.bindFramebuffer(gl.FRAMEBUFFER, colorGeoBuffer);

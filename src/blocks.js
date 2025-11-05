@@ -56,6 +56,19 @@ var blocks = [
 			back: "assets/textures/water.png",
 		},
 	},
+	{
+		transparent: true,
+		solid: true,
+		id: "game:leaves",
+		textures: {
+			top: "assets/textures/leaves.png",
+			bottom: "assets/textures/leaves.png",
+			left: "assets/textures/leaves.png",
+			right: "assets/textures/leaves.png",
+			front: "assets/textures/leaves.png",
+			back: "assets/textures/leaves.png",
+		},
+	},
 ];
 
 function getUniqueTexturePaths() {

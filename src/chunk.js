@@ -14,7 +14,7 @@ class chunkMesh {
 		this.indices = gl.createBuffer();
 	}
 
-	generateChunkMesh(parent) {
+	generateChunkMesh(parent, playerPos) {
 		const blockVerts = [
 			[0, 0, 0],
 			[1, 0, 0],
@@ -99,17 +99,30 @@ class chunkMesh {
 				}
 			}
 		}
+		let chunks = [];
+		for (let i = 0; i < indices.length; i += 3) {
+			chunks.push(indices.slice(i, i + 3));
+		}
+		chunks.sort((a, b) => {
+			const distA1 = Math.hypot(vertices[a[0]*3+0]-playerPos[0], vertices[a[0]*3+1]-playerPos[1], vertices[a[0]*3+2]-playerPos[2]);
+			const distA2 = Math.hypot(vertices[a[1]*3+0]-playerPos[0], vertices[a[1]*3+1]-playerPos[1], vertices[a[1]*3+2]-playerPos[2]);
+			const distA3 = Math.hypot(vertices[a[2]*3+0]-playerPos[0], vertices[a[2]*3+1]-playerPos[1], vertices[a[2]*3+2]-playerPos[2]);
+			const distB1 = Math.hypot(vertices[b[0]*3+0]-playerPos[0], vertices[b[0]*3+1]-playerPos[1], vertices[b[0]*3+2]-playerPos[2]);
+			const distB2 = Math.hypot(vertices[b[1]*3+0]-playerPos[0], vertices[b[1]*3+1]-playerPos[1], vertices[b[1]*3+2]-playerPos[2]);
+			const distB3 = Math.hypot(vertices[b[2]*3+0]-playerPos[0], vertices[b[2]*3+1]-playerPos[1], vertices[b[2]*3+2]-playerPos[2]);
+			return (distB1+distB2+distB3)-(distA1+distA2+distA3);
+		});
 		return {
 			positions: new Float32Array(vertices),
 			normals: new Float32Array(normals),
 			textures: new Uint8Array(textures),
 			uvs: new Float32Array(uvs),
-			indices: new Uint32Array(indices),
+			indices: new Uint32Array(chunks.flat()),
 		};
 	}
 	
-	generateMesh(parent) {
-		const mesh = this.generateChunkMesh(parent);
+	generateMesh(parent, playerPos) {
+		const mesh = this.generateChunkMesh(parent, playerPos);
 
 		gl.bindVertexArray(this.chunkArray);
 
@@ -184,9 +197,17 @@ class chunk {
 		return this.map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x];
 	}
 
-	generateMesh() {
-		this.mesh.generateMesh(this);
-		this.transparentMesh.generateMesh(this);
+	generateSolid(playerPos) {
+		this.mesh.generateMesh(this, playerPos);
+	}
+
+	generateTransparent(playerPos) {
+		this.transparentMesh.generateMesh(this, playerPos);
+	}
+
+	generateMesh(playerPos) {
+		this.generateSolid(playerPos);
+		this.generateTransparent(playerPos);
 	}
 
 	generate() {
