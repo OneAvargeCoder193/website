@@ -15,6 +15,15 @@ var pressedKeys = {
 	shift: false,
 };
 
+window.addEventListener('beforeunload', function (event) {
+	// Cancel the event
+	event.preventDefault(); 
+	// Chrome requires returnValue to be set
+	event.returnValue = ''; 
+	// For older browsers
+	return ''; 
+});
+
 canvas.addEventListener('click', () => {
 	canvas.requestPointerLock();
 });
@@ -50,10 +59,10 @@ function onMouseDown(e) {
 	);
 	const [pos, norm] = raycast(eyePosition, forward);
 	if(e.button == 0) {
-		setVoxel(pos[0], pos[1], pos[2], false);
+		setVoxel(pos[0], pos[1], pos[2], getBlock("game:air"));
 		generateBuffers(generateMesh());
 	} else if (e.button == 2) {
-		setVoxel(pos[0] + norm[0], pos[1] + norm[1], pos[2] + norm[2], true);
+		setVoxel(pos[0] + norm[0], pos[1] + norm[1], pos[2] + norm[2], getBlock("game:stone"));
 		generateBuffers(generateMesh());
 	}
 }
@@ -79,7 +88,7 @@ function raycast(pos, dir) {
 	var normal = vec3.fromValues(0, 0, 0);
 
 	for(var i = 0; i < 100; i++) {
-		if(getVoxel(mapPos[0], mapPos[1], mapPos[2]) || outOfBounds(mapPos[0], mapPos[1], mapPos[2])) break;
+		if(outOfBounds(mapPos[0], mapPos[1], mapPos[2]) || blocks[getVoxel(mapPos[0], mapPos[1], mapPos[2])].solid) break;
 		if (sideDist[0] < sideDist[1]) {
 			if (sideDist[0] < sideDist[2]) {
 				sideDist[0] += deltaDist[0];
@@ -156,7 +165,7 @@ gl.enable(gl.DEPTH_TEST);
 var NEAR = 0.1;
 var FAR = 100.0;
 
-var allTextures = ['assets/textures/stone.png']
+var allTextures = getUniqueTexturePaths();
 
 var CHUNK_SIZE = 32;
 var map = new Array(CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE);
@@ -164,7 +173,17 @@ var map = new Array(CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE);
 for(var z = 0; z < CHUNK_SIZE; z++) {
 	for(var y = 0; y < CHUNK_SIZE; y++) {
 		for(var x = 0; x < CHUNK_SIZE; x++) {
-			map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = y<8;
+			var block = getBlock("game:air");
+			if(y < 8) {
+				block = getBlock("game:grass");
+			}
+			if(y < 7) {
+				block = getBlock("game:dirt");
+			}
+			if(y < 5) {
+				block = getBlock("game:stone");
+			}
+			map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = block;
 		}
 	}
 }
@@ -175,7 +194,7 @@ function outOfBounds(x, y, z) {
 
 function getVoxel(x, y, z) {
 	if (outOfBounds(x, y, z)) {
-		return false;
+		return getBlock("game:air");
 	}
 	return map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x];
 }
@@ -206,6 +225,14 @@ function generateMesh() {
 		[-1, 0, 0],
 		[1, 0, 0],
 	];
+	const blockDirections = [
+		"back",
+		"front",
+		"top",
+		"bottom",
+		"left",
+		"right",
+	];
 	const blockQuads = [
 		[0, 3, 1, 2],
 		[5, 6, 4, 7],
@@ -223,12 +250,13 @@ function generateMesh() {
 	var vertices = [];
 	var normals = [];
 	var uvs = [];
+	var textures = [];
 	var indices = [];
 	var vertexIndex = 0;
 	for(var z = 0; z < CHUNK_SIZE; z++) {
 		for(var y = 0; y < CHUNK_SIZE; y++) {
 			for(var x = 0; x < CHUNK_SIZE; x++) {
-				if(!getVoxel(x, y, z)) continue;
+				if(!blocks[getVoxel(x, y, z)].hasOwnProperty("textures")) continue;
 				for(var p = 0; p < 6; p++) {
 					if(getVoxel(x + blockNormals[p][0], y + blockNormals[p][1], z + blockNormals[p][2])) {
 						continue;
@@ -245,6 +273,8 @@ function generateMesh() {
 						
 						uvs.push(blockUvs[i][0]);
 						uvs.push(blockUvs[i][1]);
+
+						textures.push(allTextures.indexOf(blocks[getVoxel(x, y, z)].textures[blockDirections[p]]));
 					}
 
 					indices.push(vertexIndex);
@@ -261,6 +291,7 @@ function generateMesh() {
 	return {
 		positions: new Float32Array(vertices),
 		normals: new Float32Array(normals),
+		textures: new Uint8Array(textures),
 		uvs: new Float32Array(uvs),
 		indices: new Uint32Array(indices),
 	};
@@ -279,10 +310,15 @@ function generateBuffers(chunk) {
 	gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
 	gl.enableVertexAttribArray(1);
 
+	gl.bindBuffer(gl.ARRAY_BUFFER, textureBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, chunk.textures, gl.STATIC_DRAW);
+	gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_BYTE, 0, 0);
+	gl.enableVertexAttribArray(2);
+
 	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, chunk.normals, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-	gl.enableVertexAttribArray(2);
+	gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(3);
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, chunk.indices, gl.STATIC_DRAW);
@@ -504,6 +540,7 @@ gl.bindVertexArray(chunkArray);
 
 var positionBuffer = gl.createBuffer();
 var uvBuffer = gl.createBuffer();
+var textureBuffer = gl.createBuffer();
 var normalBuffer = gl.createBuffer();
 var indices = gl.createBuffer();
 var numIndices;
@@ -539,13 +576,14 @@ var viewMatrix = calculateViewMatrix();
 var viewProjMatrix = mat4.create();
 mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-var lightPosition = vec3.fromValues(16, 48, 16);
+var lightDirection = vec3.fromValues(1, 3, 2);
+vec3.normalize(lightDirection, lightDirection);
 
 var sceneUniformData = new Float32Array(40);
 sceneUniformData.set(viewMatrix);
 sceneUniformData.set(projMatrix, 16);
 sceneUniformData.set(eyePosition, 32);
-sceneUniformData.set(lightPosition, 36);
+sceneUniformData.set(lightDirection, 36);
 
 var sceneUniformBuffer = gl.createBuffer();
 gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
@@ -726,7 +764,7 @@ async function main() {
 		sceneUniformData.set(viewMatrix);
 		sceneUniformData.set(projMatrix, 16);
 		sceneUniformData.set(eyePosition, 32);
-		sceneUniformData.set(lightPosition, 36);
+		sceneUniformData.set(lightDirection, 36);
 
 		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
 		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
