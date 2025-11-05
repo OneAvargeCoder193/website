@@ -58,9 +58,15 @@ function exitFullscren() {
 var lastMoveX = 0;
 
 function onMouseMove(e) {
+	if(Math.abs(e.movementX - lastMoveX) > 50) { // Idk why but it glitches sometiems
+		return;
+	}
+
 	// movementX and movementY give relative mouse motion
 	yaw -= e.movementX * sensitivity;
 	pitch -= e.movementY * sensitivity;
+
+	lastMoveX = e.movementX;
 
 	// Clamp pitch to prevent flipping
 	const maxPitch = Math.PI / 2;
