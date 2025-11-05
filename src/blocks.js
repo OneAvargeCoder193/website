@@ -45,7 +45,7 @@ var blocks = [
 	},
 	{
 		transparent: true,
-		solid: true, //TODO: Remove when testing is done
+		solid: false,
 		id: "game:water",
 		textures: {
 			top: "assets/textures/water.png",

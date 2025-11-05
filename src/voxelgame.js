@@ -84,7 +84,7 @@ function onMouseDown(e) {
 		localChunk.set(...pos, getBlock("game:air"));
 		localChunk.generateMesh(eyePosition);
 	} else if (e.button == 2) {
-		localChunk.set(...vec3.add([], pos, norm), getBlock("game:leaves"));
+		localChunk.set(...vec3.add([], pos, norm), getBlock("game:stone"));
 		localChunk.generateMesh(eyePosition);
 	}
 }
