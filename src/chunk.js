@@ -1,6 +1,5 @@
 const CHUNK_SIZE = 32;
-
-noise.seed(0);
+const CHUNK_SIZE_B = CHUNK_SIZE + 2;
 
 class chunkMesh {
 	constructor(isTransparent) {
@@ -170,9 +169,10 @@ class chunk {
 		this.cx = cx;
 		this.cy = cy;
 		this.cz = cz;
-		this.map = new Uint32Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+		this.map = new Uint32Array(CHUNK_SIZE_B * CHUNK_SIZE_B * CHUNK_SIZE_B);
 		this.mesh = new chunkMesh(false);
 		this.transparentMesh = new chunkMesh(true);
+		this.lastPlayerPos = [0, 0, 0];
 	}
 
 	getLocalPos(wx, wy, wz) {
@@ -184,17 +184,17 @@ class chunk {
 	}
 	
 	outOfBounds(x, y, z) {
-		return x < 0 || x > CHUNK_SIZE - 1 || y < 0 || y > CHUNK_SIZE - 1 || z < 0 || z > CHUNK_SIZE - 1;
+		return x < -1 || x > CHUNK_SIZE || y < -1 || y > CHUNK_SIZE || z < -1 || z > CHUNK_SIZE;
 	}
 
 	set(x, y, z, block) {
 		if(this.outOfBounds(x, y, z)) return;
-		this.map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x] = block;
+		this.map[(z+1)*CHUNK_SIZE_B*CHUNK_SIZE_B+(y+1)*CHUNK_SIZE_B+(x+1)] = block;
 	}
 
-	get(x, y, z, block) {
+	get(x, y, z) {
 		if(this.outOfBounds(x, y, z)) return getBlock("game:air");
-		return this.map[z*CHUNK_SIZE*CHUNK_SIZE+y*CHUNK_SIZE+x];
+		return this.map[(z+1)*CHUNK_SIZE_B*CHUNK_SIZE_B+(y+1)*CHUNK_SIZE_B+(x+1)];
 	}
 
 	generateSolid(playerPos) {
@@ -203,6 +203,7 @@ class chunk {
 
 	generateTransparent(playerPos) {
 		this.transparentMesh.generateMesh(this, playerPos);
+		this.lastPlayerPos = vec3.floor([], playerPos);
 	}
 
 	generateMesh(playerPos) {
@@ -211,14 +212,14 @@ class chunk {
 	}
 
 	generate() {
-		for(var lz = 0; lz < CHUNK_SIZE; lz++) {
-			const z = lz + this.cz * CHUNK_SIZE;
-			for(var lx = 0; lx < CHUNK_SIZE; lx++) {
-				const x = lx + this.cx * CHUNK_SIZE;
+		for(var lz = 0; lz < CHUNK_SIZE_B; lz++) {
+			const z = lz + this.cz * CHUNK_SIZE - 1;
+			for(var lx = 0; lx < CHUNK_SIZE_B; lx++) {
+				const x = lx + this.cx * CHUNK_SIZE - 1;
 				var height = noise.simplex2(x / 32, z / 32);
 				var grassLayer = Math.floor(height*3 + 8);
-				for(var ly = 0; ly < CHUNK_SIZE; ly++) {
-					const y = ly + this.cy * CHUNK_SIZE;
+				for(var ly = 0; ly < CHUNK_SIZE_B; ly++) {
+					const y = ly + this.cy * CHUNK_SIZE - 1;
 					var block = getBlock("game:air");
 					if(y < grassLayer - 3) {
 						block = getBlock("game:stone");
@@ -230,7 +231,7 @@ class chunk {
 						block = getBlock("game:water");
 					}
 					
-					this.map[lz*CHUNK_SIZE*CHUNK_SIZE+ly*CHUNK_SIZE+lx] = block;
+					this.map[lz*CHUNK_SIZE_B*CHUNK_SIZE_B+ly*CHUNK_SIZE_B+lx] = block;
 				}
 			}
 		}

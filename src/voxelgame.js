@@ -79,64 +79,13 @@ function onMouseDown(e) {
 		Math.sin(pitch),
 		-Math.cos(pitch) * Math.cos(yaw),
 	);
-	const [pos, norm] = raycast(eyePosition, forward);
+	const [pos, norm] = game.raycast(eyePosition, forward);
+	if(pos == undefined) return;
 	if(e.button == 0) {
-		localChunk.set(...pos, getBlock("game:air"));
-		localChunk.generateMesh(eyePosition);
+		game.setAndUpdate(eyePosition, ...pos, getBlock("game:air"));
 	} else if (e.button == 2) {
-		localChunk.set(...vec3.add([], pos, norm), getBlock("game:stone"));
-		localChunk.generateMesh(eyePosition);
+		game.setAndUpdate(eyePosition, ...vec3.add([], pos, norm), getBlock("game:stone"));
 	}
-}
-
-function raycast(pos, dir) {
-	function abs(out, a) {
-		out[0] = Math.abs(a[0]);
-		out[1] = Math.abs(a[1]);
-		out[2] = Math.abs(a[2]);
-		return out;
-	}
-	var deltaDist = abs([], vec3.inverse([], dir));
-	var rayStep = vec3.fromValues(Math.sign(dir[0]), Math.sign(dir[1]), Math.sign(dir[2]));
-	var mapPos = vec3.floor([], pos);
-	let sideDist = vec3.create();
-	for (let i = 0; i < 3; i++) {
-		if (dir[i] < 0) {
-			sideDist[i] = (pos[i] - mapPos[i]) * deltaDist[i];
-		} else {
-			sideDist[i] = (mapPos[i] + 1.0 - pos[i]) * deltaDist[i];
-		}
-	}
-	var normal = vec3.fromValues(0, 0, 0);
-
-	for(var i = 0; i < 100; i++) {
-		if(localChunk.outOfBounds(...localChunk.getLocalPos(...mapPos)) || blocks[localChunk.get(...mapPos)].solid) break;
-		if (sideDist[0] < sideDist[1]) {
-			if (sideDist[0] < sideDist[2]) {
-				sideDist[0] += deltaDist[0];
-				mapPos[0] += rayStep[0];
-				normal = [1, 0, 0];
-			} else {
-				sideDist[2] += deltaDist[2];
-				mapPos[2] += rayStep[2];
-				normal = [0, 0, 1];
-			}
-		} else {
-			if (sideDist[1] < sideDist[2]) {
-				sideDist[1] += deltaDist[1];
-				mapPos[1] += rayStep[1];
-				normal = [0, 1, 0];
-			} else {
-				sideDist[2] += deltaDist[2];
-				mapPos[2] += rayStep[2];
-				normal = [0, 0, 1];
-			}
-		}
-	}
-
-	vec3.mul(normal, normal, rayStep);
-	vec3.negate(normal, normal);
-	return [mapPos, normal];
 }
 
 function calculateViewMatrix() {
@@ -461,9 +410,14 @@ var normalBuffer = gl.createBuffer();
 var indices = gl.createBuffer();
 var numIndices;
 
-const localChunk = new chunk(0, 0, 0);
-localChunk.generate();
-localChunk.generateMesh(eyePosition);
+const game = new world(0, 0, 0);
+for(var x = -1; x < 2; x++) {
+	for(var y = -1; y < 2; y++) {
+		for(var z = -1; z < 2; z++) {
+			game.loadChunk(eyePosition, x, y, z);
+		}
+	}
+}
 
 // Quad for screen-space passes
 var quadArray = gl.createVertexArray();
@@ -687,8 +641,8 @@ async function main() {
 		}
 
 		if(!vec3.equals(vec3.floor([], eyePosition), lastPosBlock)) {
-			localChunk.generateTransparent(eyePosition);
 			lastPosBlock = vec3.floor([], eyePosition);
+			game.updateTransparentMeshes(lastPosBlock);
 		}
 		
 		gl.bindFramebuffer(gl.FRAMEBUFFER, colorGeoBuffer);
@@ -706,7 +660,7 @@ async function main() {
 		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
 		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
-		localChunk.render();
+		game.render();
 
 		gl.bindVertexArray(quadArray);
 
@@ -738,7 +692,7 @@ async function main() {
 		gl.depthMask(false);
 		gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, transparentSceneUniformBuffer);
 		gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
-		localChunk.renderTransparent();
+		game.renderTransparent();
 		gl.depthMask(true);
 
 		requestAnimationFrame(draw);
