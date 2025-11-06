@@ -52,7 +52,7 @@
 			flat out int instanceId;
             
             float magicMath(float t) {
-                t = 1.0 / (1.0 + exp(-t));
+                t = 1.0 / (1.0 + exp(-5.0*t));
                 return (smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, smoothstep(0.0, 1.0, t)))) + t) / 2.0;
             }
 
