@@ -2,6 +2,7 @@ const canvas = document.getElementById("canvas");
 canvas.width = screen.width;
 canvas.height = screen.height;
 
+const renderDistance = 3;
 var pitch = 0;
 var yaw = Math.PI;
 var sensitivity = 0.002;
@@ -84,7 +85,7 @@ function onMouseDown(e) {
 	if(e.button == 0) {
 		game.setAndUpdate(eyePosition, ...pos, getBlock("game:air"));
 	} else if (e.button == 2) {
-		game.setAndUpdate(eyePosition, ...vec3.add([], pos, norm), getBlock("game:stone"));
+		game.setAndUpdate(eyePosition, ...vec3.add([], pos, norm), getBlock("game:leaves"));
 	}
 }
 
@@ -407,17 +408,11 @@ var positionBuffer = gl.createBuffer();
 var uvBuffer = gl.createBuffer();
 var textureBuffer = gl.createBuffer();
 var normalBuffer = gl.createBuffer();
-var indices = gl.createBuffer();
+var indicesList = gl.createBuffer();
 var numIndices;
 
 const game = new world(0, 0, 0);
-for(var x = -1; x < 2; x++) {
-	for(var y = -1; y < 2; y++) {
-		for(var z = -1; z < 2; z++) {
-			game.loadChunk(eyePosition, x, y, z);
-		}
-	}
-}
+game.loadRenderDistance(eyePosition, renderDistance);
 
 // Quad for screen-space passes
 var quadArray = gl.createVertexArray();
@@ -538,8 +533,8 @@ async function createTextureArray(gl, imageURLs) {
   // Set texture parameters
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT);
 
   gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
 
@@ -611,7 +606,7 @@ async function main() {
 		// DRAW BOXES
 		////////////////////
 
-		var speed = 4;
+		var speed = 16;
 
 		if(pressedKeys.w) {
 			const forw = vec2.fromValues(-Math.sin(yaw)*speed*dt, -Math.cos(yaw)*speed*dt);
@@ -639,6 +634,8 @@ async function main() {
 		if(pressedKeys.shift) {
 			eyePosition[1] -= speed*dt;
 		}
+
+		game.update(eyePosition, renderDistance);
 
 		if(!vec3.equals(vec3.floor([], eyePosition), lastPosBlock)) {
 			lastPosBlock = vec3.floor([], eyePosition);

@@ -4,17 +4,20 @@ class world {
 		noise.seed(this.seed);
 
 		this.chunks = {};
+		this.chunkPos = [];
+
+		this.oldPlayerChunk = [0, 0, 0];
 	}
 
 	updateTransparentMeshes(playerPos) {
 		for(const [_, ch] of Object.entries(this.chunks)) {
 			const clamped = vec3.fromValues(
-				Math.min(Math.max(playerPos[0], 0), CHUNK_SIZE),
-				Math.min(Math.max(playerPos[1], 0), CHUNK_SIZE),
-				Math.min(Math.max(playerPos[2], 0), CHUNK_SIZE),
+				Math.min(Math.max(playerPos[0] - ch.cx * CHUNK_SIZE, 0), CHUNK_SIZE),
+				Math.min(Math.max(playerPos[1] - ch.cy * CHUNK_SIZE, 0), CHUNK_SIZE),
+				Math.min(Math.max(playerPos[2] - ch.cz * CHUNK_SIZE, 0), CHUNK_SIZE),
 			);
 			if(!vec3.equals(clamped, ch.lastPlayerPos)) {
-				ch.generateTransparent(clamped);
+				ch.sortTransparent(clamped);
 			}
 		};
 	}
@@ -101,6 +104,7 @@ class world {
 		ch.generate();
 		ch.generateMesh(playerPos);
 		this.chunks[[cx, cy, cz]] = ch;
+		this.chunkPos.push([cx, cy, cz]);
 	}
 
 	render() {
@@ -110,9 +114,9 @@ class world {
 	}
 
 	renderTransparent() {
-		for(const [_, ch] of Object.entries(this.chunks)) {
-			ch.renderTransparent();
-		};
+		for(const key of this.chunkPos) {
+			this.chunks[key].renderTransparent();
+		}
 	}
 	
 	raycast(pos, dir) {
@@ -163,5 +167,36 @@ class world {
 		vec3.mul(normal, normal, rayStep);
 		vec3.negate(normal, normal);
 		return this.isLoaded(...mapPos)?[mapPos, normal]:[undefined, undefined];
+	}
+
+	loadRenderDistance(playerPos, renderDistance) {
+		const cx = Math.floor(playerPos[0] / CHUNK_SIZE);
+		const cy = Math.floor(playerPos[1] / CHUNK_SIZE);
+		const cz = Math.floor(playerPos[2] / CHUNK_SIZE);
+		for(var x = -renderDistance; x <= renderDistance; x++) {
+			for(var y = -renderDistance; y <= renderDistance; y++) {
+				for(var z = -renderDistance; z <= renderDistance; z++) {
+					game.loadChunk(eyePosition, cx + x, cy + y, cz + z);
+				}
+			}
+		}
+	}
+
+	update(playerPos, renderDistance) {
+		const playerChunk = vec3.fromValues(
+			Math.floor(playerPos[0] / CHUNK_SIZE),
+			Math.floor(playerPos[1] / CHUNK_SIZE),
+			Math.floor(playerPos[2] / CHUNK_SIZE),
+		);
+		if(vec3.equals(playerChunk, this.oldPlayerChunk)) {
+			return;
+		}
+		this.oldPlayerChunk = playerChunk;
+
+		this.loadRenderDistance(playerPos, renderDistance);
+
+		this.chunkPos.sort((a, b) => {
+			return Math.hypot(...vec3.sub([], b, playerChunk)) - Math.hypot(...vec3.sub([], a, playerChunk));
+		})
 	}
 }

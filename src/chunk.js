@@ -1,6 +1,9 @@
 const CHUNK_SIZE = 32;
 const CHUNK_SIZE_B = CHUNK_SIZE + 2;
 
+var genMeshPool = workerpool.pool('src/generateChunkMeshWorker.js', {maxWorkers: 4});
+var sortPool = workerpool.pool('src/sortWorker.js', {maxWorkers: 4});
+
 class chunkMesh {
 	constructor(isTransparent) {
 		this.isTransparent = isTransparent;
@@ -11,9 +14,12 @@ class chunkMesh {
 		this.textureBuffer = gl.createBuffer();
 		this.normalBuffer = gl.createBuffer();
 		this.indices = gl.createBuffer();
+		this.indicesList = [];
+		this.vertsList = [];
+		this.generated = false;
 	}
 
-	generateChunkMesh(parent, playerPos) {
+	generateChunkMesh(parent) {
 		const blockVerts = [
 			[0, 0, 0],
 			[1, 0, 0],
@@ -54,11 +60,11 @@ class chunkMesh {
 			[1, 0],
 			[1, 1],
 		];
-		var vertices = [];
+		this.vertsList = [];
 		var normals = [];
 		var uvs = [];
 		var textures = [];
-		var indices = [];
+		this.indicesList = [];
 		var vertexIndex = 0;
 		for(var z = 0; z < CHUNK_SIZE; z++) {
 			for(var y = 0; y < CHUNK_SIZE; y++) {
@@ -73,9 +79,9 @@ class chunkMesh {
 						}
 						
 						for(var i = 0; i < 4; i++) {
-							vertices.push(x + blockVerts[blockQuads[p][i]][0]);
-							vertices.push(y + blockVerts[blockQuads[p][i]][1]);
-							vertices.push(z + blockVerts[blockQuads[p][i]][2]);
+							this.vertsList.push(x + blockVerts[blockQuads[p][i]][0]);
+							this.vertsList.push(y + blockVerts[blockQuads[p][i]][1]);
+							this.vertsList.push(z + blockVerts[blockQuads[p][i]][2]);
 							
 							normals.push(blockNormals[p][0]);
 							normals.push(blockNormals[p][1]);
@@ -87,70 +93,76 @@ class chunkMesh {
 							textures.push(allTextures.indexOf(block.textures[blockDirections[p]]));
 						}
 
-						indices.push(vertexIndex);
-						indices.push(vertexIndex + 1);
-						indices.push(vertexIndex + 2);
-						indices.push(vertexIndex + 2);
-						indices.push(vertexIndex + 1);
-						indices.push(vertexIndex + 3);
+						this.indicesList.push(vertexIndex);
+						this.indicesList.push(vertexIndex + 1);
+						this.indicesList.push(vertexIndex + 2);
+						this.indicesList.push(vertexIndex + 2);
+						this.indicesList.push(vertexIndex + 1);
+						this.indicesList.push(vertexIndex + 3);
 						vertexIndex += 4;
 					}
 				}
 			}
 		}
-		let chunks = [];
-		for (let i = 0; i < indices.length; i += 3) {
-			chunks.push(indices.slice(i, i + 3));
-		}
-		chunks.sort((a, b) => {
-			const distA1 = Math.hypot(vertices[a[0]*3+0]-playerPos[0], vertices[a[0]*3+1]-playerPos[1], vertices[a[0]*3+2]-playerPos[2]);
-			const distA2 = Math.hypot(vertices[a[1]*3+0]-playerPos[0], vertices[a[1]*3+1]-playerPos[1], vertices[a[1]*3+2]-playerPos[2]);
-			const distA3 = Math.hypot(vertices[a[2]*3+0]-playerPos[0], vertices[a[2]*3+1]-playerPos[1], vertices[a[2]*3+2]-playerPos[2]);
-			const distB1 = Math.hypot(vertices[b[0]*3+0]-playerPos[0], vertices[b[0]*3+1]-playerPos[1], vertices[b[0]*3+2]-playerPos[2]);
-			const distB2 = Math.hypot(vertices[b[1]*3+0]-playerPos[0], vertices[b[1]*3+1]-playerPos[1], vertices[b[1]*3+2]-playerPos[2]);
-			const distB3 = Math.hypot(vertices[b[2]*3+0]-playerPos[0], vertices[b[2]*3+1]-playerPos[1], vertices[b[2]*3+2]-playerPos[2]);
-			return (distB1+distB2+distB3)-(distA1+distA2+distA3);
-		});
 		return {
-			positions: new Float32Array(vertices),
+			positions: new Float32Array(this.vertsList),
 			normals: new Float32Array(normals),
 			textures: new Uint8Array(textures),
 			uvs: new Float32Array(uvs),
-			indices: new Uint32Array(chunks.flat()),
 		};
+	}
+
+	sortIndices(playerPos) {
+		sortPool.exec('sortTriangles', [this.indicesList, this.vertsList, playerPos])
+			.then(sorted => {
+				// Use the sorted indices in WebGL
+				gl.bindVertexArray(this.chunkArray);
+				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indices);
+				gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sorted, gl.DYNAMIC_DRAW);
+			})
+			.catch(err => console.error('Worker error:', err));
 	}
 	
 	generateMesh(parent, playerPos) {
-		const mesh = this.generateChunkMesh(parent, playerPos);
+		const mesh = genMeshPool.exec('generateChunkMesh', [parent.map, blocks, allTextures, this.isTransparent])
+			.then(({positions, normals, textures, uvs, indices}) => {
+				gl.bindVertexArray(this.chunkArray);
 
-		gl.bindVertexArray(this.chunkArray);
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+				gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+				gl.enableVertexAttribArray(0);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
-		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-		gl.enableVertexAttribArray(0);
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+				gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+				gl.enableVertexAttribArray(1);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
-		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-		gl.enableVertexAttribArray(1);
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.textureBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, textures, gl.STATIC_DRAW);
+				gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_BYTE, 0, 0);
+				gl.enableVertexAttribArray(2);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.textureBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, mesh.textures, gl.STATIC_DRAW);
-		gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_BYTE, 0, 0);
-		gl.enableVertexAttribArray(2);
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+				gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
+				gl.enableVertexAttribArray(3);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
-		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
-		gl.enableVertexAttribArray(3);
+				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indices);
+				gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.DYNAMIC_DRAW);
 
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indices);
-		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
-		this.numIndices = mesh.indices.length;
+				this.indicesList = Array.from(indices);
+				this.vertsList = Array.from(positions);
+				this.sortIndices(playerPos);
+
+				this.numIndices = this.indicesList.length;
+				this.generated = true;
+			})
+			.catch(err => console.error('Worker error:', err));
 	}
 
 	render() {
+		if(!this.generated) return;
 		if(this.isTransparent) {
 			gl.enable(gl.BLEND);
 			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -197,18 +209,14 @@ class chunk {
 		return this.map[(z+1)*CHUNK_SIZE_B*CHUNK_SIZE_B+(y+1)*CHUNK_SIZE_B+(x+1)];
 	}
 
-	generateSolid(playerPos) {
-		this.mesh.generateMesh(this, playerPos);
-	}
-
-	generateTransparent(playerPos) {
-		this.transparentMesh.generateMesh(this, playerPos);
+	sortTransparent(playerPos) {
+		this.transparentMesh.sortIndices(playerPos);
 		this.lastPlayerPos = vec3.floor([], playerPos);
 	}
 
 	generateMesh(playerPos) {
-		this.generateSolid(playerPos);
-		this.generateTransparent(playerPos);
+		this.mesh.generateMesh(this, playerPos);
+		this.transparentMesh.generateMesh(this, playerPos);
 	}
 
 	generate() {
