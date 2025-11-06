@@ -173,10 +173,20 @@ class world {
 		const cx = Math.floor(playerPos[0] / CHUNK_SIZE);
 		const cy = Math.floor(playerPos[1] / CHUNK_SIZE);
 		const cz = Math.floor(playerPos[2] / CHUNK_SIZE);
+		this.chunkPos = this.chunkPos.filter(([x, y, z]) => {
+			const dx = Math.abs(cx - x);
+			const dy = Math.abs(cy - y);
+			const dz = Math.abs(cz - z);
+			return Math.max(dx, dy, dz) <= renderDistance;
+		});
+		this.chunks = this.chunkPos.reduce((obj, key) => {
+			obj[key] = this.chunks[key];
+			return obj;
+		}, {});
 		for(var x = -renderDistance; x <= renderDistance; x++) {
 			for(var y = -renderDistance; y <= renderDistance; y++) {
 				for(var z = -renderDistance; z <= renderDistance; z++) {
-					game.loadChunk(eyePosition, cx + x, cy + y, cz + z);
+					this.loadChunk(eyePosition, cx + x, cy + y, cz + z);
 				}
 			}
 		}

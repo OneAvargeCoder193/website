@@ -85,7 +85,7 @@ function onMouseDown(e) {
 	if(e.button == 0) {
 		game.setAndUpdate(eyePosition, ...pos, getBlock("game:air"));
 	} else if (e.button == 2) {
-		game.setAndUpdate(eyePosition, ...vec3.add([], pos, norm), getBlock("game:leaves"));
+		game.setAndUpdate(eyePosition, ...vec3.add([], pos, norm), getBlock("game:stone"));
 	}
 }
 

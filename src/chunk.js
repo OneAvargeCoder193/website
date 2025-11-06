@@ -224,8 +224,8 @@ class chunk {
 			const z = lz + this.cz * CHUNK_SIZE - 1;
 			for(var lx = 0; lx < CHUNK_SIZE_B; lx++) {
 				const x = lx + this.cx * CHUNK_SIZE - 1;
-				var height = noise.simplex2(x / 32, z / 32);
-				var grassLayer = Math.floor(height*3 + 8);
+				var height = noise.simplex2(x / 128, z / 128);
+				var grassLayer = Math.floor(height*64 + 8);
 				for(var ly = 0; ly < CHUNK_SIZE_B; ly++) {
 					const y = ly + this.cy * CHUNK_SIZE - 1;
 					var block = getBlock("game:air");
