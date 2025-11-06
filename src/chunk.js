@@ -137,6 +137,8 @@ class chunk {
 				height += noise.simplex2(x / 32, z / 32)*4;
 				height += noise.simplex2(x / 16, z / 16)*2;
 				height += noise.simplex2(x / 8, z / 8);
+				// Make beaches
+				height = 5 * (Math.sqrt(1 + (height / 5) * (height / 5)) - 1) * Math.sign(height);
 				var grassLayer = Math.floor(height + 8);
 				for(var ly = 0; ly < CHUNK_SIZE_B; ly++) {
 					const y = ly + this.cy * CHUNK_SIZE - 1;
