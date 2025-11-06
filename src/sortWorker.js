@@ -1,6 +1,6 @@
 // load workerpool in the browser
 if (typeof importScripts === 'function') {
-  importScripts('workerpool.js'); // make sure path points to workerpool.js
+  importScripts('workerpool.min.js'); // make sure path points to workerpool.js
 }
 
 function sortTriangles(indices, verts, playerPos) {

@@ -1,6 +1,6 @@
 // load workerpool in the browser
 if (typeof importScripts === 'function') {
-  importScripts('workerpool.js'); // ensure correct path
+  importScripts('workerpool.min.js'); // ensure correct path
 }
 
 const CHUNK_SIZE = 32;
