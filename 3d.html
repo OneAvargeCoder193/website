@@ -109,6 +109,9 @@
                 vec3 position = vPosition.xyz;
                 vec3 normal = normalize(vNormal.xyz);
                 vec2 uv = vUV;
+                if(!gl_FrontFacing) {
+                    uv.x = 1.0-uv.x;
+                }
 
                 vec4 baseColor = texture(uTexture, vec3(uv, instanceId));
                 vec3 eyeDirection = normalize(uEyePosition.xyz - position);
