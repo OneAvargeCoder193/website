@@ -36,7 +36,37 @@
     text-align: center;
 }
 
+.navdiv:hover {
+	width: 100px;
+}
+
+.navtext:hover {
+	font-size: 20px;
+}
+
 #canvas {
     width: 1200px;
     height: 800px;
+}
+
+#para1 {
+	font-size: 24px;
+	color: blue;
+	background-color: orange;
+}
+
+#para2 {
+	font-size: 12px;
+	color: yellow;
+	background-color: purple;
+}
+
+#para3 {
+	font-size: 36px;
+	color: red;
+	background-color: green;
+}
+
+.pause {
+	padding: 100px;
 }
