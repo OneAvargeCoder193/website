@@ -1,5 +1,9 @@
 .text {
-    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+	font-family: "Stack Sans Text", sans-serif;
+}
+
+#kuzmatext {
+	font-weight: 1000;
 }
 
 #kuzma {
