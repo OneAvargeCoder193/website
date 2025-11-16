@@ -19,99 +19,6 @@ class chunkMesh {
 		this.generated = false;
 	}
 
-	generateChunkMesh(parent) {
-		const blockVerts = [
-			[0, 0, 0],
-			[1, 0, 0],
-			[1, 1, 0],
-			[0, 1, 0],
-			[0, 0, 1],
-			[1, 0, 1],
-			[1, 1, 1],
-			[0, 1, 1],
-		];
-		const blockNormals = [
-			[0, 0, -1],
-			[0, 0, 1],
-			[0, 1, 0],
-			[0, -1, 0],
-			[-1, 0, 0],
-			[1, 0, 0],
-		];
-		const blockDirections = [
-			"back",
-			"front",
-			"top",
-			"bottom",
-			"left",
-			"right",
-		];
-		const blockQuads = [
-			[0, 3, 1, 2],
-			[5, 6, 4, 7],
-			[3, 7, 2, 6],
-			[1, 5, 0, 4],
-			[4, 7, 0, 3],
-			[1, 2, 5, 6],
-		];
-		const blockUvs = [
-			[0, 0],
-			[0, 1],
-			[1, 0],
-			[1, 1],
-		];
-		this.vertsList = [];
-		var normals = [];
-		var uvs = [];
-		var textures = [];
-		this.indicesList = [];
-		var vertexIndex = 0;
-		for(var z = 0; z < CHUNK_SIZE; z++) {
-			for(var y = 0; y < CHUNK_SIZE; y++) {
-				for(var x = 0; x < CHUNK_SIZE; x++) {
-					const block = blocks[parent.get(x, y, z)];
-					if(!block.hasOwnProperty("textures")) continue;
-					if(block.transparent != this.isTransparent) continue;
-					for(var p = 0; p < 6; p++) {
-						const otherBlock = blocks[parent.get(x + blockNormals[p][0], y + blockNormals[p][1], z + blockNormals[p][2])];
-						if(otherBlock.hasOwnProperty("textures") && otherBlock.transparent == this.isTransparent) {
-							continue;
-						}
-						
-						for(var i = 0; i < 4; i++) {
-							this.vertsList.push(x + blockVerts[blockQuads[p][i]][0]);
-							this.vertsList.push(y + blockVerts[blockQuads[p][i]][1]);
-							this.vertsList.push(z + blockVerts[blockQuads[p][i]][2]);
-							
-							normals.push(blockNormals[p][0]);
-							normals.push(blockNormals[p][1]);
-							normals.push(blockNormals[p][2]);
-							
-							uvs.push(blockUvs[i][0]);
-							uvs.push(blockUvs[i][1]);
-
-							textures.push(allTextures.indexOf(block.textures[blockDirections[p]]));
-						}
-
-						this.indicesList.push(vertexIndex);
-						this.indicesList.push(vertexIndex + 1);
-						this.indicesList.push(vertexIndex + 2);
-						this.indicesList.push(vertexIndex + 2);
-						this.indicesList.push(vertexIndex + 1);
-						this.indicesList.push(vertexIndex + 3);
-						vertexIndex += 4;
-					}
-				}
-			}
-		}
-		return {
-			positions: new Float32Array(this.vertsList),
-			normals: new Float32Array(normals),
-			textures: new Uint8Array(textures),
-			uvs: new Float32Array(uvs),
-		};
-	}
-
 	sortIndices(playerPos) {
 		sortPool.exec('sortTriangles', [this.indicesList, this.vertsList, playerPos])
 			.then(sorted => {
@@ -224,8 +131,15 @@ class chunk {
 			const z = lz + this.cz * CHUNK_SIZE - 1;
 			for(var lx = 0; lx < CHUNK_SIZE_B; lx++) {
 				const x = lx + this.cx * CHUNK_SIZE - 1;
-				var height = noise.simplex2(x / 128, z / 128);
-				var grassLayer = Math.floor(height*64 + 8);
+				var height = noise.simplex2(x / 512, z / 512) * 64 // Continents
+				height += noise.simplex2(x / 128, z / 128)*16;
+				height += noise.simplex2(x / 64, z / 64)*8;
+				height += noise.simplex2(x / 32, z / 32)*4;
+				height += noise.simplex2(x / 16, z / 16)*2;
+				height += noise.simplex2(x / 8, z / 8);
+				// Make beaches
+				height = 5 * (Math.sqrt(1 + (height / 5) * (height / 5)) - 1) * Math.sign(height);
+				var grassLayer = Math.floor(height + 8);
 				for(var ly = 0; ly < CHUNK_SIZE_B; ly++) {
 					const y = ly + this.cy * CHUNK_SIZE - 1;
 					var block = getBlock("game:air");

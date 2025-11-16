@@ -135,7 +135,7 @@ gl.clearColor(0.25, 0.765625, 1, 1.0);
 gl.enable(gl.DEPTH_TEST);
 
 var NEAR = 0.1;
-var FAR = 100.0;
+var FAR = 1000.0;
 
 var allTextures = getUniqueTexturePaths();
 
